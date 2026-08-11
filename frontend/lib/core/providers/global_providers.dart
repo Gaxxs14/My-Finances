@@ -119,10 +119,11 @@ final decryptedCredentialsProvider = FutureProvider<List<Map<String, String>>>((
 });
 
 final apiClientProvider = Provider<ApiClient>((ref) {
-  // Replace with actual production Koyeb/Render URL when deployed
+  // Use http://10.0.2.2:5227 for Android Emulator connection to PC, or http://localhost:5227 for iOS/Web
+  const String localUrl = 'http://10.0.2.2:5227';
   const String productionUrl = 'https://my-finances-backend.onrender.com';
   return ApiClient(
-    baseUrl: productionUrl,
+    baseUrl: localUrl, // Change to productionUrl when deploying to Render/Koyeb
     secureStorage: ref.watch(secureStorageProvider),
   );
 });
