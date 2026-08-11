@@ -32,7 +32,7 @@ class MyApp extends ConsumerWidget {
       theme: AppTheme.lightTheme,
 
       // Internationalization for currency & date formats
-      localizationsDelegates: const [
+      localizationsDelegates: [
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
