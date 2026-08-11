@@ -1,0 +1,85 @@
+# Unified GitIgnore for My-Finances (Flutter + C# .NET)
+
+# =========================================================================
+# 1. C# .NET Ignore Rules
+# =========================================================================
+# User-specific files
+*.rsuser
+*.suo
+*.user
+*.usermd
+*.slduser
+*.sqlproj.user
+*.userprefs
+
+# Build results
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+x64/
+x86/
+[Aa]rm/
+[Aa]rm64/
+bld/
+[Bb]in/
+[Ob]j/
+[Ll]og/
+[Ll]ogs/
+
+# Visual Studio 2015/2017/2019/2022 cache project info
+.vs/
+
+# Rider Cache
+.idea/
+
+# Local configuration files
+appsettings.local.json
+appsettings.Development.json
+
+# =========================================================================
+# 2. Flutter / Dart Ignore Rules
+# =========================================================================
+# Flutter-installed packages
+**/frontend/.dart_tool/
+**/frontend/.flutter-plugins
+**/frontend/.flutter-plugins-dependencies
+**/frontend/.packages
+**/frontend/build/
+
+# Android specific
+**/frontend/android/local.properties
+**/frontend/android/app/key.properties
+**/frontend/android/app/**.keystore
+**/frontend/android/app/**.jks
+**/frontend/android/app/google-services.json
+
+# iOS specific
+**/frontend/ios/Flutter/Generated.xcconfig
+**/frontend/ios/Flutter/flutter_export_environment.sh
+**/frontend/ios/Flutter/App.framework
+**/frontend/ios/Flutter/App.podspec
+**/frontend/ios/Pods/
+**/frontend/ios/Runner/GeneratedPluginRegistrant.h
+**/frontend/ios/Runner/GeneratedPluginRegistrant.m
+**/frontend/ios/Runner/google-services.json
+
+# Web specific
+**/frontend/build/web/
+
+# macOS/Windows/Linux native builds
+**/frontend/macos/Flutter/ephemeral/
+**/frontend/windows/flutter/ephemeral/
+**/frontend/linux/flutter/ephemeral/
+
+# Coverage
+**/frontend/coverage/
+
+# =========================================================================
+# 3. General / OS Specific Ignore Rules
+# =========================================================================
+.DS_Store
+Thumbs.db
+*.log
+.env
+.env.*
+!.env.example

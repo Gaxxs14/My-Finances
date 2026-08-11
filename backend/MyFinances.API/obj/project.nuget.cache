@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "dgSpecHash": "IhfNwg3MTGg=",
+  "success": true,
+  "projectFilePath": "C:\\FlutterProjects\\My-Finances\\backend\\MyFinances.API\\MyFinances.API.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\ggallardo\\.nuget\\packages\\microsoft.aspnetcore.openapi\\10.0.5\\microsoft.aspnetcore.openapi.10.0.5.nupkg.sha512",
+    "C:\\Users\\ggallardo\\.nuget\\packages\\microsoft.openapi\\2.0.0\\microsoft.openapi.2.0.0.nupkg.sha512"
+  ],
+  "logs": [
+    {
+      "code": "NU1903",
+      "level": "Warning",
+      "message": "El paquete \"Microsoft.OpenApi\" 2.0.0 tiene una vulnerabilidad de gravedad alta conocida, https://github.com/advisories/GHSA-v5pm-xwqc-g5wc",
+      "projectPath": "C:\\FlutterProjects\\My-Finances\\backend\\MyFinances.API\\MyFinances.API.csproj",
+      "warningLevel": 1,
+      "filePath": "C:\\FlutterProjects\\My-Finances\\backend\\MyFinances.API\\MyFinances.API.csproj",
+      "libraryId": "Microsoft.OpenApi",
+      "targetGraphs": [
+        "net10.0"
+      ]
+    }
+  ]
+}
