@@ -51,8 +51,27 @@ class AuthStateNotifier extends StateNotifier<bool> {
     // If not registered, state is false. If registered, we expect login.
   }
 
-  Future<bool> register(String pin) async {
-    final success = await _authService.registerUser(pin);
+  Future<bool> register({
+    required String username,
+    required String masterPassword,
+    required String pin,
+  }) async {
+    final success = await _authService.registerUser(
+      username: username,
+      masterPassword: masterPassword,
+      pin: pin,
+    );
+    if (success) {
+      state = true;
+    }
+    return success;
+  }
+
+  Future<bool> loginWithPassword({
+    required String username,
+    required String masterPassword,
+  }) async {
+    final success = await _authService.loginWithPassword(username, masterPassword);
     if (success) {
       state = true;
     }
@@ -115,6 +134,14 @@ final decryptedCredentialsProvider = FutureProvider<List<Map<String, String>>>((
     return await ref.watch(localPasswordRepositoryProvider).getCredentials();
   } catch (_) {
     return [];
+  }
+});
+
+final categorySummaryProvider = FutureProvider<Map<String, double>>((ref) async {
+  try {
+    return await ref.watch(localTransactionRepositoryProvider).getCategorySummary();
+  } catch (_) {
+    return {};
   }
 });
 

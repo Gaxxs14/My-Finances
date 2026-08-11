@@ -15,11 +15,38 @@ void main() {
   );
 }
 
-class MyApp extends ConsumerWidget {
+class MyApp extends ConsumerStatefulWidget {
   const MyApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    
+    // Auto-Lock security: locks database and wipes keys from memory when minimized
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+      ref.read(authStateProvider.notifier).logout();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final isLoggedIn = ref.watch(authStateProvider);
 
     return MaterialApp(

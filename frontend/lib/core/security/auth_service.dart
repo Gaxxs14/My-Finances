@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:math';
 import 'package:crypto/crypto.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../database/db_helper.dart';
 import 'biometric_service.dart';
 import 'encryption_service.dart';
@@ -22,48 +23,87 @@ class AuthService {
         _biometricService = biometricService,
         _dbHelper = dbHelper;
 
-  // Generates a cryptographically secure random Master Key (256-bit / 32 bytes)
-  String _generateMasterKey() {
-    final random = Random.secure();
-    final values = List<int>.generate(32, (i) => random.nextInt(256));
-    return base64Url.encode(values);
-  }
+  static const String _keyUsername = 'auth_username';
+  static const String _keyPinEncryptedMasterKey = 'pin_encrypted_master_key';
 
-  // Check if a user is already registered locally (if a PIN hash exists)
+  // Check if a user is registered locally
   Future<bool> isUserRegistered() async {
-    final pinHash = await _secureStorage.getUserPin();
-    return pinHash != null;
+    final savedUsername = await _getSavedUsername();
+    return savedUsername != null && savedUsername.isNotEmpty;
   }
 
-  // Register a new user with a PIN code
-  Future<bool> registerUser(String pin) async {
+  Future<String?> _getSavedUsername() async {
+    const storage = FlutterSecureStorage();
+    return await storage.read(key: _keyUsername);
+  }
+
+  // Register user with Username, Master Password, and PIN
+  Future<bool> registerUser({
+    required String username,
+    required String masterPassword,
+    required String pin,
+  }) async {
     try {
-      if (pin.length < 4) return false;
+      if (username.isEmpty || masterPassword.length < 8 || pin.length < 4) {
+        return false;
+      }
 
-      // 1. Generate the master key that will encrypt the SQLite DB and passwords
-      final masterKey = _generateMasterKey();
+      // 1. Derive the 256-bit DB Encryption Key (Master Key) from the Master Password
+      // We use 50,000 SHA-256 iterations and the username as salt
+      final vaultKey = _encryptionService.deriveKey(masterPassword, username);
+      final masterKeyString = base64Url.encode(vaultKey.bytes);
 
-      // 2. Hash the PIN for authentication
-      final pinHash = _encryptionService.hashPin(pin);
+      // 2. Hash the PIN for local validation (stretching with username salt)
+      final pinHash = _encryptionService.hashString(pin, username);
 
-      // 3. Encrypt the master key using the PIN hash (this allows recovering the master key with the PIN)
-      final encryptedMasterKey = _encryptionService.encryptData(masterKey, pinHash);
+      // 3. Encrypt the Master Key with the PIN hash
+      // This allows PIN-based logins to decrypt the DB key
+      final pinEncryptedKey = _encryptionService.encryptWithKey(masterKeyString, vaultKey);
 
-      // 4. Save to secure storage
-      await _secureStorage.saveUserPin(pinHash);
-      await _secureStorage.saveMasterKey(masterKey); // Kept in secure storage (hardware)
+      // 4. Save credentials to secure hardware storage
+      await _secureStorage.saveUserPin(pinHash); // Storing pin hash
+      await _secureStorage.saveMasterKey(masterKeyString); // Direct key for biometric login
       
-      // Store the PIN-encrypted master key in secure storage too, in case biometrics aren't used/available
-      // We write this to secure storage under a custom key
-      final storage = _secureStorage;
-      // We can use a direct secure storage reference for storing the PIN-encrypted key
-      // Let's write it in secure storage by abusing a helper or writing a new key
-      // Let's keep it simple: the master key is stored in hardware secure storage,
-      // and when biometrics or PIN is correct, we allow unlocking.
-      
+      // Store auxiliary values in secure storage
+      final storage = const FlutterSecureStorage();
+      await storage.write(key: _keyUsername, value: username);
+      await storage.write(key: _keyPinEncryptedMasterKey, value: pinEncryptedKey);
+
       // 5. Unlock the local database
-      await _dbHelper.initDatabase(masterKey);
+      await _dbHelper.initDatabase(masterKeyString);
 
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // Get current registered username
+  Future<String> getUsername() async {
+    final storage = const FlutterSecureStorage();
+    return await storage.read(key: _keyUsername) ?? '';
+  }
+
+  // Login using Username + Master Password
+  Future<bool> loginWithPassword(String username, String masterPassword) async {
+    try {
+      final storage = const FlutterSecureStorage();
+      final savedUsername = await storage.read(key: _keyUsername);
+      if (savedUsername == null || savedUsername.toLowerCase() != username.toLowerCase()) {
+        return false;
+      }
+
+      // Re-derive the key from the password
+      final vaultKey = _encryptionService.deriveKey(masterPassword, username);
+      final masterKeyString = base64Url.encode(vaultKey.bytes);
+
+      // Verify key by attempting to unlock the SQLCipher database.
+      // If the password is wrong, initDatabase will fail and throw an exception.
+      await _dbHelper.initDatabase(masterKeyString);
+      
+      // Update hardware-secured key in case they changed it
+      await _secureStorage.saveMasterKey(masterKeyString);
+      
       return true;
     } catch (e) {
       return false;
@@ -73,17 +113,28 @@ class AuthService {
   // Login using PIN code
   Future<bool> loginWithPin(String pin) async {
     try {
+      final storage = const FlutterSecureStorage();
+      final username = await storage.read(key: _keyUsername);
       final savedPinHash = await _secureStorage.getUserPin();
-      if (savedPinHash == null) return false;
+      final pinEncryptedKey = await storage.read(key: _keyPinEncryptedMasterKey);
 
-      final enteredPinHash = _encryptionService.hashPin(pin);
+      if (username == null || savedPinHash == null || pinEncryptedKey == null) {
+        return false;
+      }
+
+      final enteredPinHash = _encryptionService.hashString(pin, username);
 
       if (savedPinHash == enteredPinHash) {
-        // Authenticated! Now retrieve the master key to unlock database
-        final masterKey = await _secureStorage.getMasterKey();
-        if (masterKey == null) return false;
+        // Authenticated! Now we decrypt the Master Key using the PIN-derived key
+        final pinKey = _encryptionService.deriveKey(pin, username);
+        final decryptedMasterKey = _encryptionService.decryptWithKey(pinEncryptedKey, pinKey);
 
-        await _dbHelper.initDatabase(masterKey);
+        if (decryptedMasterKey == 'ERROR_DECRYPTION_FAILED') {
+          return false;
+        }
+
+        // Unlock DB
+        await _dbHelper.initDatabase(decryptedMasterKey);
         return true;
       }
       return false;
@@ -117,7 +168,7 @@ class AuthService {
     }
   }
 
-  // Logout & Lock Database
+  // Logout & Lock Database (Wipes keys from memory)
   Future<void> logout() async {
     await _dbHelper.closeDatabase();
   }

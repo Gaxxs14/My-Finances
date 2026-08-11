@@ -106,4 +106,22 @@ class LocalTransactionRepository {
       'expense': totalExpense,
     };
   }
+
+  Future<Map<String, double>> getCategorySummary() async {
+    final now = DateTime.now();
+    final firstDayOfMonth = DateTime(now.year, now.month, 1).toIso8601String();
+
+    final List<Map<String, dynamic>> res = await _db.rawQuery('''
+      SELECT category, SUM(amount) as total
+      FROM transactions
+      WHERE type = 'expense' AND date >= ?
+      GROUP BY category
+    ''', [firstDayOfMonth]);
+
+    final Map<String, double> summary = {};
+    for (var row in res) {
+      summary[row['category'] as String] = double.parse(row['total'].toString());
+    }
+    return summary;
+  }
 }

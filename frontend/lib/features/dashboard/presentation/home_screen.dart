@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../password_manager/presentation/password_vault_screen.dart';
+import '../../password_manager/presentation/password_auditor_screen.dart';
+import '../../transactions/presentation/budget_manager_screen.dart';
 import 'dashboard_screen.dart';
 import '../../../core/theme/app_theme.dart';
 
@@ -15,7 +17,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   final List<Widget> _screens = const [
     DashboardScreen(),
+    BudgetManagerScreen(),
     PasswordVaultScreen(),
+    PasswordAuditorScreen(),
   ];
 
   @override
@@ -44,9 +48,19 @@ class _HomeScreenState extends State<HomeScreen> {
             label: 'Finanzas',
           ),
           BottomNavigationBarItem(
+            icon: Icon(Icons.pie_chart_outline),
+            activeIcon: Icon(Icons.pie_chart),
+            label: 'Límites',
+          ),
+          BottomNavigationBarItem(
             icon: Icon(Icons.vpn_key_outlined),
             activeIcon: Icon(Icons.vpn_key),
             label: 'Bóveda',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.security_outlined),
+            activeIcon: Icon(Icons.security),
+            label: 'Auditoría',
           ),
         ],
       ),

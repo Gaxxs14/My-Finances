@@ -10,16 +10,40 @@ class LoginScreen extends ConsumerStatefulWidget {
   ConsumerState<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends ConsumerState<LoginScreen> {
-  final List<int> _pin = [];
+class _LoginScreenState extends ConsumerState<LoginScreen> with TickerProviderStateMixin {
+  late TabController _tabController;
+  final _formKey = GlobalKey<FormState>();
+  
+  // Registration controllers
+  final _regUserCtrl = TextEditingController();
+  final _regPassCtrl = TextEditingController();
+  final _regPinCtrl = TextEditingController();
+
+  // Password Login controllers
+  final _loginUserCtrl = TextEditingController();
+  final _loginPassCtrl = TextEditingController();
+
+  final List<int> _pinInput = [];
   bool _isRegistering = false;
-  String _firstPinAttempt = '';
   String _errorMessage = '';
+  String _savedUsername = '';
 
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 2, vsync: this);
     _checkStatus();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    _regUserCtrl.dispose();
+    _regPassCtrl.dispose();
+    _regPinCtrl.dispose();
+    _loginUserCtrl.dispose();
+    _loginPassCtrl.dispose();
+    super.dispose();
   }
 
   Future<void> _checkStatus() async {
@@ -29,7 +53,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     });
 
     if (isRegistered) {
-      // Auto trigger biometrics
+      final username = await ref.read(authServiceProvider).getUsername();
+      setState(() {
+        _savedUsername = username;
+        _loginUserCtrl.text = username;
+      });
+      // Auto trigger biometrics for faster entry
       _triggerBiometrics();
     }
   }
@@ -37,73 +66,77 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Future<void> _triggerBiometrics() async {
     final success = await ref.read(authStateProvider.notifier).loginWithBiometrics();
     if (success) {
-      // Riverpod state listener will handle navigation or showing Dashboard
+      _errorMessage = '';
     }
   }
 
   void _onKeyPress(int number) {
-    if (_pin.length < 4) {
+    if (_pinInput.length < 4) {
       setState(() {
-        _pin.add(number);
+        _pinInput.add(number);
         _errorMessage = '';
       });
     }
 
-    if (_pin.length == 4) {
-      _processPin();
+    if (_pinInput.length == 4) {
+      _processPinLogin();
     }
   }
 
   void _onDelete() {
-    if (_pin.isNotEmpty) {
+    if (_pinInput.isNotEmpty) {
       setState(() {
-        _pin.removeLast();
+        _pinInput.removeLast();
       });
     }
   }
 
-  Future<void> _processPin() async {
-    final enteredPin = _pin.join();
-    setState(() => _pin.clear());
+  Future<void> _processPinLogin() async {
+    final pin = _pinInput.join();
+    setState(() => _pinInput.clear());
 
-    if (_isRegistering) {
-      if (_firstPinAttempt.isEmpty) {
-        // First step of registration
-        setState(() {
-          _firstPinAttempt = enteredPin;
-        });
-      } else {
-        // Second step of registration: confirmation
-        if (_firstPinAttempt == enteredPin) {
-          final success = await ref.read(authStateProvider.notifier).register(enteredPin);
-          if (!success) {
-            setState(() {
-              _firstPinAttempt = '';
-              _errorMessage = 'Error al registrar el PIN. Reintenta.';
-            });
-          }
-        } else {
-          setState(() {
-            _firstPinAttempt = '';
-            _errorMessage = 'Los PINs no coinciden. Comienza de nuevo.';
-          });
-        }
-      }
-    } else {
-      // Login attempt
-      final success = await ref.read(authStateProvider.notifier).loginWithPin(enteredPin);
-      if (!success) {
-        setState(() {
-          _errorMessage = 'PIN incorrecto. Reintenta.';
-        });
-      }
+    final success = await ref.read(authStateProvider.notifier).loginWithPin(pin);
+    if (!success) {
+      setState(() {
+        _errorMessage = 'PIN incorrecto. Reintenta.';
+      });
+    }
+  }
+
+  Future<void> _processPasswordLogin() async {
+    if (_loginUserCtrl.text.isEmpty || _loginPassCtrl.text.isEmpty) return;
+
+    final success = await ref.read(authStateProvider.notifier).loginWithPassword(
+      username: _loginUserCtrl.text,
+      masterPassword: _loginPassCtrl.text,
+    );
+
+    if (!success) {
+      setState(() {
+        _errorMessage = 'Usuario o Contraseña incorrectos.';
+      });
+    }
+  }
+
+  Future<void> _processRegister() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    final success = await ref.read(authStateProvider.notifier).register(
+      username: _regUserCtrl.text,
+      masterPassword: _regPassCtrl.text,
+      pin: _regPinCtrl.text,
+    );
+
+    if (!success) {
+      setState(() {
+        _errorMessage = 'Error al registrar el usuario. Reintenta.';
+      });
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
-    final isDark = brightness == Brightness.dark;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     
     return Scaffold(
       body: Container(
@@ -117,74 +150,143 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           ),
         ),
         child: SafeArea(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Spacer(),
-              // Top Icon / Header
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppTheme.primaryDark.withOpacity(0.1),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.lock_outline,
-                  color: AppTheme.primaryDark,
-                  size: 40,
-                ),
-              ),
-              const SizedBox(height: 24),
-              Text(
-                _isRegistering
-                    ? (_firstPinAttempt.isEmpty
-                        ? 'Crea tu PIN de Acceso'
-                        : 'Confirma tu PIN')
-                    : 'Introduce tu PIN',
-                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                _isRegistering
-                    ? 'Define un código numérico de 4 dígitos'
-                    : 'Acceso seguro a tu bóveda personal',
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-              const SizedBox(height: 32),
-              
-              // PIN Dots Display
-              Row(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(4, (index) {
-                  return Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 12),
-                    width: 16,
-                    height: 16,
+                children: [
+                  // Logo/Icon
+                  Container(
+                    padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
+                      color: AppTheme.primaryDark.withOpacity(0.1),
                       shape: BoxShape.circle,
-                      color: index < _pin.length
-                          ? AppTheme.primaryDark
-                          : AppTheme.textSecondaryDark.withOpacity(0.3),
                     ),
-                  );
-                }),
+                    child: const Icon(
+                      Icons.shield_outlined,
+                      color: AppTheme.primaryDark,
+                      size: 50,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'My Finances',
+                    style: Theme.of(context).textTheme.headlineLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 0.5,
+                        ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    _isRegistering ? 'Crea tu bóveda criptográfica' : 'Bóveda Cifrada de Extremo a Extremo',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: AppTheme.textSecondaryDark,
+                        ),
+                  ),
+                  const SizedBox(height: 32),
+
+                  if (_errorMessage.isNotEmpty) ...[
+                    Text(
+                      _errorMessage,
+                      style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+
+                  _isRegistering ? _buildRegisterForm() : _buildLoginForm(),
+                ],
               ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRegisterForm() {
+    return Card(
+      elevation: 4,
+      color: AppTheme.surfaceDark.withOpacity(0.9),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                'Registro Inicial',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 20),
               
-              if (_errorMessage.isNotEmpty) ...[
-                const SizedBox(height: 16),
-                Text(
-                  _errorMessage,
-                  style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w500),
+              // Username Input
+              TextFormField(
+                controller: _regUserCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Nombre de Usuario',
+                  prefixIcon: Icon(Icons.person_outline),
                 ),
-              ],
-              
-              const Spacer(),
-              
-              // Custom PIN Keyboard
-              _buildKeyboard(),
+                style: const TextStyle(color: Colors.white),
+                validator: (val) => (val == null || val.isEmpty) ? 'Requerido' : null,
+              ),
+              const SizedBox(height: 12),
+
+              // Master Password Input
+              TextFormField(
+                controller: _regPassCtrl,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  labelText: 'Contraseña Maestra',
+                  prefixIcon: Icon(Icons.password_outlined),
+                ),
+                style: const TextStyle(color: Colors.white),
+                validator: (val) {
+                  if (val == null || val.length < 8) {
+                    return 'Debe tener al menos 8 caracteres';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 12),
+
+              // PIN Input
+              TextFormField(
+                controller: _regPinCtrl,
+                keyboardType: TextInputType.number,
+                obscureText: true,
+                maxLength: 4,
+                decoration: const InputDecoration(
+                  labelText: 'PIN de acceso rápido (4 dígitos)',
+                  prefixIcon: Icon(Icons.pin_outlined),
+                  counterText: '',
+                ),
+                style: const TextStyle(color: Colors.white),
+                validator: (val) {
+                  if (val == null || val.length != 4 || int.tryParse(val) == null) {
+                    return 'Debe ser un PIN de 4 dígitos';
+                  }
+                  return null;
+                },
+              ),
               const SizedBox(height: 24),
+
+              ElevatedButton(
+                onPressed: _processRegister,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.primaryDark,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                child: const Text(
+                  'Crear Bóveda Segura',
+                  style: TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold),
+                ),
+              ),
             ],
           ),
         ),
@@ -192,69 +294,158 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     );
   }
 
-  Widget _buildKeyboard() {
+  Widget _buildLoginForm() {
     return Column(
       children: [
-        for (var i = 0; i < 3; i++)
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              for (var j = 1; j <= 3; j++) _buildKeyButton(i * 3 + j),
+        // TabBar to switch between Password and PIN login methods
+        Container(
+          decoration: BoxDecoration(
+            color: AppTheme.surfaceDark.withOpacity(0.5),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: TabBar(
+            controller: _tabController,
+            indicator: BoxDecoration(
+              color: AppTheme.primaryDark,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            labelColor: Colors.white,
+            unselectedLabelColor: AppTheme.textSecondaryDark,
+            dividerColor: Colors.transparent,
+            tabs: const [
+              Tab(text: 'Contraseña Maestra'),
+              Tab(text: 'PIN / Huella'),
             ],
           ),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
-            // Left Button: Biometrics (only if not registering)
-            _isRegistering
-                ? const SizedBox(width: 80, height: 80)
-                : _buildIconButton(Icons.fingerprint, _triggerBiometrics),
-            _buildKeyButton(0),
-            // Right Button: Backspace
-            _buildIconButton(Icons.backspace_outlined, _onDelete),
-          ],
+        ),
+        const SizedBox(height: 20),
+        
+        SizedBox(
+          height: 380,
+          child: TabBarView(
+            controller: _tabController,
+            children: [
+              // Tab 1: Password Login
+              Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    TextFormField(
+                      controller: _loginUserCtrl,
+                      decoration: const InputDecoration(
+                        labelText: 'Usuario',
+                        prefixIcon: Icon(Icons.person_outline),
+                      ),
+                      style: const TextStyle(color: Colors.white),
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _loginPassCtrl,
+                      obscureText: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Contraseña Maestra',
+                        prefixIcon: Icon(Icons.password_outlined),
+                      ),
+                      style: const TextStyle(color: Colors.white),
+                    ),
+                    const SizedBox(height: 24),
+                    ElevatedButton(
+                      onPressed: _processPasswordLogin,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.primaryDark,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      child: const Text(
+                        'Desbloquear Bóveda',
+                        style: TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Tab 2: PIN Pad / Biometrics Login
+              Column(
+                children: [
+                  // PIN Dots Display
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: List.generate(4, (index) {
+                      return Container(
+                        margin: const EdgeInsets.symmetric(horizontal: 10),
+                        width: 14,
+                        height: 14,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: index < _pinInput.length
+                              ? AppTheme.primaryDark
+                              : AppTheme.textSecondaryDark.withOpacity(0.3),
+                        ),
+                      );
+                    }),
+                  ),
+                  const SizedBox(height: 16),
+                  
+                  // Custom numeric keypad
+                  Expanded(
+                    child: GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 3,
+                        childAspectRatio: 1.5,
+                        mainAxisSpacing: 8,
+                        crossAxisSpacing: 8,
+                      ),
+                      itemCount: 12,
+                      itemBuilder: (context, index) {
+                        if (index == 9) {
+                          // Biometrics Key
+                          return IconButton(
+                            onPressed: _triggerBiometrics,
+                            icon: const Icon(Icons.fingerprint, size: 30, color: AppTheme.primaryDark),
+                          );
+                        } else if (index == 10) {
+                          // Zero Key
+                          return _buildPinKey(0);
+                        } else if (index == 11) {
+                          // Delete Key
+                          return IconButton(
+                            onPressed: _onDelete,
+                            icon: const Icon(Icons.backspace_outlined, size: 24, color: AppTheme.primaryDark),
+                          );
+                        } else {
+                          // Keys 1-9
+                          return _buildPinKey(index + 1);
+                        }
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ],
     );
   }
 
-  Widget _buildKeyButton(int val) {
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 8),
-      width: 80,
-      height: 80,
-      child: OutlinedButton(
-        onPressed: () => _onKeyPress(val),
-        style: OutlinedButton.styleFrom(
-          shape: const CircleBorder(),
-          side: BorderSide(
-            color: AppTheme.primaryDark.withOpacity(0.15),
-          ),
-          backgroundColor: AppTheme.surfaceDark.withOpacity(0.3),
+  Widget _buildPinKey(int value) {
+    return InkWell(
+      onTap: () => _onKeyPress(value),
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: AppTheme.surfaceDark.withOpacity(0.3),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppTheme.primaryDark.withOpacity(0.1)),
         ),
         child: Text(
-          '$val',
-          style: const TextStyle(
-            fontSize: 28,
-            fontWeight: FontWeight.w600,
-            color: Colors.white,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildIconButton(IconData icon, VoidCallback action) {
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 8),
-      width: 80,
-      height: 80,
-      child: IconButton(
-        onPressed: action,
-        icon: Icon(icon, size: 32, color: AppTheme.primaryDark),
-        style: IconButton.styleFrom(
-          backgroundColor: AppTheme.primaryDark.withOpacity(0.1),
-          shape: const CircleBorder(),
+          '$value',
+          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
         ),
       ),
     );

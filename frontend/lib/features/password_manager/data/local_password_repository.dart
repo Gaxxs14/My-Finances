@@ -1,4 +1,5 @@
 import 'package:sqflite_sqlcipher/sqflite.dart';
+import 'package:encrypt/encrypt.dart' as encrypt;
 import '../../../../core/database/db_helper.dart';
 import '../../../../core/security/encryption_service.dart';
 import '../../../../core/security/secure_storage_service.dart';
@@ -27,10 +28,16 @@ class LocalPasswordRepository {
     return key;
   }
 
+  // Derive a unique 256-bit encryption key for the credentials vault using SHA-256 key stretching
+  Future<encrypt.Key> _getVaultKey() async {
+    final masterKey = await _getMasterKey();
+    return _encryptionService.deriveKey(masterKey, 'PasswordVaultUniqueSaltKey2026');
+  }
+
   // Get all passwords in decrypted format
   Future<List<Map<String, String>>> getCredentials() async {
     final rawList = await _db.query('password_vault', orderBy: 'service_name ASC');
-    final masterKey = await _getMasterKey();
+    final vaultKey = await _getVaultKey();
 
     final List<Map<String, String>> decryptedList = [];
 
@@ -43,9 +50,9 @@ class LocalPasswordRepository {
       final String? encryptedNotes = raw['encrypted_notes'] as String?;
       final String updatedAt = raw['updated_at'] as String;
 
-      final decryptedPass = _encryptionService.decryptData(encryptedPass, masterKey);
+      final decryptedPass = _encryptionService.decryptWithKey(encryptedPass, vaultKey);
       final decryptedNotes = encryptedNotes != null
-          ? _encryptionService.decryptData(encryptedNotes, masterKey)
+          ? _encryptionService.decryptWithKey(encryptedNotes, vaultKey)
           : '';
 
       decryptedList.add({
@@ -71,11 +78,11 @@ class LocalPasswordRepository {
     String? websiteUrl,
     String? clearNotes,
   }) async {
-    final masterKey = await _getMasterKey();
+    final vaultKey = await _getVaultKey();
 
-    final encryptedPassword = _encryptionService.encryptData(clearPassword, masterKey);
+    final encryptedPassword = _encryptionService.encryptWithKey(clearPassword, vaultKey);
     final encryptedNotes = clearNotes != null && clearNotes.isNotEmpty
-        ? _encryptionService.encryptData(clearNotes, masterKey)
+        ? _encryptionService.encryptWithKey(clearNotes, vaultKey)
         : null;
 
     final data = {
