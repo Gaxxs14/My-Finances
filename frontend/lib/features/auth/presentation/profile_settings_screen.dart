@@ -138,7 +138,6 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
       },
     ).then((confirmed) async {
       if (confirmed == true) {
-        final auth = ref.read(authServiceProvider);
         final storage = ref.read(secureStorageProvider);
         final encryption = ref.read(encryptionProvider);
 
@@ -206,12 +205,14 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
       setState(() {
         _biometricsEnabled = false;
       });
-      SweetAlert.show(
-        context,
-        title: 'Desactivado',
-        description: 'Autenticación biométrica desactivada.',
-        icon: SweetAlertIcon.warning,
-      );
+      if (mounted) {
+        SweetAlert.show(
+          context,
+          title: 'Desactivado',
+          description: 'Autenticación biométrica desactivada.',
+          icon: SweetAlertIcon.warning,
+        );
+      }
     } else {
       // Enable biometrics: ask password to verify and store master key copy
       final passCtrl = TextEditingController();
@@ -241,7 +242,6 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
         },
       ).then((verified) async {
         if (verified == true) {
-          final auth = ref.read(authServiceProvider);
           final encryption = ref.read(encryptionProvider);
           final derivedKey = encryption.deriveKey(passCtrl.text, _username);
           final masterKeyString = base64Url.encode(derivedKey.bytes);
