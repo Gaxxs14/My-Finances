@@ -1,5 +1,8 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:nfc_manager/nfc_manager.dart';
+import 'package:nfc_manager/nfc_manager_android.dart';
+import 'package:nfc_manager/nfc_manager_ios.dart';
 import '../../../core/theme/app_theme.dart';
 
 class NfcScannerSheet extends StatefulWidget {
@@ -75,35 +78,21 @@ class _NfcScannerSheetState extends State<NfcScannerSheet> with SingleTickerProv
         try {
           String? uid;
           
-          // ignore: invalid_use_of_protected_member
-          final Map tagData = tag.data as Map;
-          
-          // Standard identifier fields in nfc_manager tags:
-          if (tagData.containsKey('nfca')) {
-            final nfca = tagData['nfca'] as Map;
-            if (nfca.containsKey('identifier')) {
-              uid = _toHex(List<int>.from(nfca['identifier'] as List));
+          if (Platform.isAndroid) {
+            final androidTag = NfcTagAndroid.from(tag);
+            if (androidTag != null) {
+              uid = _toHex(androidTag.id);
             }
-          } else if (tagData.containsKey('mifare')) {
-            final mifare = tagData['mifare'] as Map;
-            if (mifare.containsKey('identifier')) {
-              uid = _toHex(List<int>.from(mifare['identifier'] as List));
+          } else if (Platform.isIOS) {
+            final mifare = MiFareIos.from(tag);
+            if (mifare != null) {
+              uid = _toHex(mifare.identifier);
+            } else {
+              final iso7816 = Iso7816Ios.from(tag);
+              if (iso7816 != null) {
+                uid = _toHex(iso7816.identifier);
+              }
             }
-          } else if (tagData.containsKey('isodep')) {
-            final isodep = tagData['isodep'] as Map;
-            if (isodep.containsKey('identifier')) {
-              uid = _toHex(List<int>.from(isodep['identifier'] as List));
-            }
-          } else if (tagData.containsKey('ndef')) {
-            final ndef = tagData['ndef'] as Map;
-            if (ndef.containsKey('identifier')) {
-              uid = _toHex(List<int>.from(ndef['identifier'] as List));
-            }
-          }
-
-          // Fallback if no matching standard block, try top-level keys
-          if (uid == null && tagData.containsKey('identifier')) {
-            uid = _toHex(List<int>.from(tagData['identifier'] as List));
           }
 
           if (uid != null) {
