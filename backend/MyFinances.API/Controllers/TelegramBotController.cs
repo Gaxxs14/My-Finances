@@ -324,7 +324,7 @@ namespace MyFinances.API.Controllers
 
         private async Task SendTelegramMessage(long chatId, string text)
         {
-            var botToken = _configuration["Telegram:BotToken"] ?? "7348927492:AAF-z79D8EfgH1287eYuh892347uY2187eA"; // Fallback placeholder
+            var botToken = _configuration["Telegram:BotToken"] ?? "8517965835:AAHUfxF_NxdMiHE9292ZahkyuqZxtjahGKU";
             var url = $"https://api.telegram.org/bot{botToken}/sendMessage";
 
             var payload = new
