@@ -29,11 +29,9 @@ class AppTheme {
       colorScheme: const ColorScheme.dark(
         primary: primaryDark,
         secondary: accentDark,
-        background: backgroundDark,
         surface: surfaceDark,
         onPrimary: Colors.white,
         onSecondary: Colors.white,
-        onBackground: textPrimaryDark,
         onSurface: textPrimaryDark,
       ),
       textTheme: GoogleFonts.outfitTextTheme(const TextTheme(
@@ -78,11 +76,9 @@ class AppTheme {
       colorScheme: const ColorScheme.light(
         primary: primaryLight,
         secondary: accentLight,
-        background: backgroundLight,
         surface: surfaceLight,
         onPrimary: Colors.white,
         onSecondary: Colors.white,
-        onBackground: textPrimaryLight,
         onSurface: textPrimaryLight,
       ),
       textTheme: GoogleFonts.outfitTextTheme(const TextTheme(
