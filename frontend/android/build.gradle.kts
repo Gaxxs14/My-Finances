@@ -24,7 +24,7 @@ tasks.register<Delete>("clean") {
 }
 
 subprojects {
-    afterEvaluate {
+    val configureProject = {
         try {
             val android = extensions.findByName("android")
             if (android != null) {
@@ -32,7 +32,6 @@ subprojects {
                 val setNamespace = android::class.java.methods.firstOrNull { it.name == "setNamespace" }
                 val currentNamespace = getNamespace?.invoke(android)
                 if (currentNamespace == null) {
-                    // Try to read package name from Manifest or fallback to project group
                     var pkgName: String? = null
                     val manifestFile = file("src/main/AndroidManifest.xml")
                     if (manifestFile.exists()) {
@@ -45,6 +44,14 @@ subprojects {
             }
         } catch (e: Exception) {
             // Safe fallback
+        }
+    }
+
+    if (state.executed) {
+        configureProject()
+    } else {
+        afterEvaluate {
+            configureProject()
         }
     }
 }
