@@ -146,11 +146,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with TickerProviderSt
           _errorMessage = 'Error al registrar el usuario. Reintenta.';
         });
       } else {
+        final recoveryKey = ref.read(authStateProvider.notifier).generatedRecoveryKey ?? 'No disponible';
         if (mounted) {
           SweetAlert.show(
             context,
             title: '¡Bóveda Creada!',
-            description: 'Tu bóveda se ha registrado en la nube y desbloqueado localmente con éxito.',
+            description: 'Tu bóveda se ha registrado en la nube con éxito.\n\nESTA ES TU CLAVE DE RECUPERACIÓN (Zero-Knowledge):\n\n$recoveryKey\n\nPor favor, cópiala y guárdala en un lugar seguro. Es la única forma de recuperar tu acceso si olvidas tu contraseña.',
+            confirmButtonText: 'Entendido y Copiado',
             icon: SweetAlertIcon.success,
           );
         }
@@ -168,6 +170,107 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with TickerProviderSt
         );
       }
     }
+  }
+
+  Future<void> _showRecoveryDialog() async {
+    final formKey = GlobalKey<FormState>();
+    final recoveryKeyCtrl = TextEditingController();
+    final newPassCtrl = TextEditingController();
+    final newPinCtrl = TextEditingController();
+
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return AlertDialog(
+          backgroundColor: AppTheme.surfaceDark,
+          title: const Text('Recuperar Acceso a Bóveda', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          content: SingleChildScrollView(
+            child: Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'Ingresa tu clave de recuperación (Zero-Knowledge) para restablecer tus accesos de seguridad.',
+                    style: TextStyle(color: AppTheme.textSecondaryDark, fontSize: 13),
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: recoveryKeyCtrl,
+                    decoration: const InputDecoration(labelText: 'Clave de Recuperación', prefixIcon: Icon(Icons.key_outlined)),
+                    style: const TextStyle(color: Colors.white),
+                    validator: (val) => (val == null || val.isEmpty) ? 'Campo requerido' : null,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: newPassCtrl,
+                    decoration: const InputDecoration(labelText: 'Nueva Contraseña Maestra (mín. 8)', prefixIcon: Icon(Icons.password_outlined)),
+                    obscureText: true,
+                    style: const TextStyle(color: Colors.white),
+                    validator: (val) => (val == null || val.length < 8) ? 'Contraseña muy corta' : null,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: newPinCtrl,
+                    decoration: const InputDecoration(labelText: 'Nuevo PIN (4 dígitos)', prefixIcon: Icon(Icons.fiber_pin_outlined)),
+                    obscureText: true,
+                    keyboardType: TextInputType.number,
+                    style: const TextStyle(color: Colors.white),
+                    maxLength: 4,
+                    validator: (val) => (val == null || val.length < 4) ? 'Debe tener 4 dígitos' : null,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              child: const Text('Cancelar'),
+              onPressed: () => Navigator.pop(ctx),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryDark),
+              child: const Text('Restablecer', style: TextStyle(color: Colors.white)),
+              onPressed: () {
+                if (formKey.currentState!.validate()) {
+                  Navigator.pop(ctx, true);
+                }
+              },
+            ),
+          ],
+        );
+      },
+    ).then((confirmed) async {
+      if (confirmed == true) {
+        final newKey = await ref.read(authStateProvider.notifier).recoverAccess(
+          recoveryKey: recoveryKeyCtrl.text,
+          newMasterPassword: newPassCtrl.text,
+          newPin: newPinCtrl.text,
+        );
+
+        if (newKey != null) {
+          if (mounted) {
+            SweetAlert.show(
+              context,
+              title: '¡Acceso Restablecido!',
+              description: 'Tu contraseña y PIN han sido cambiados.\n\nTU NUEVA CLAVE DE RECUPERACIÓN ES:\n\n$newKey\n\nPor favor, cópiala y guárdala. La anterior ha quedado invalidada.',
+              confirmButtonText: 'Entendido y Copiado',
+              icon: SweetAlertIcon.success,
+            );
+          }
+        } else {
+          if (mounted) {
+            SweetAlert.show(
+              context,
+              title: 'Error de Recuperación',
+              description: 'Clave de recuperación incorrecta o datos inválidos. Intenta de nuevo.',
+              icon: SweetAlertIcon.error,
+            );
+          }
+        }
+      }
+    });
   }
 
   @override
@@ -396,6 +499,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with TickerProviderSt
                       child: const Text(
                         'Desbloquear Bóveda',
                         style: TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextButton(
+                      onPressed: _showRecoveryDialog,
+                      child: const Text(
+                        '¿Olvidaste tu contraseña maestra?',
+                        style: TextStyle(color: AppTheme.primaryDark, fontWeight: FontWeight.bold),
                       ),
                     ),
                   ],

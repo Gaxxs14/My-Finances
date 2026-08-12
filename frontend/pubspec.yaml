@@ -60,6 +60,7 @@ dependencies:
   encrypt: ^5.0.3
   sqflite_sqlcipher: ^3.4.1
   nfc_manager: ^4.2.1
+  telephony: ^0.2.0
 
 dev_dependencies:
   flutter_test:

@@ -8,9 +8,14 @@ import '../../features/transactions/data/local_transaction_repository.dart';
 import '../../features/password_manager/data/local_password_repository.dart';
 import '../network/api_client.dart';
 import '../network/sync_service.dart';
+import '../network/sms_parser_service.dart';
 
 final secureStorageProvider = Provider<SecureStorageService>((ref) {
   return SecureStorageService();
+});
+
+final smsParserServiceProvider = Provider<SmsParserService>((ref) {
+  return SmsParserService();
 });
 
 final encryptionProvider = Provider<EncryptionService>((ref) {
@@ -43,6 +48,7 @@ final authStateProvider = StateNotifierProvider<AuthStateNotifier, bool>((ref) {
 
 class AuthStateNotifier extends StateNotifier<bool> {
   final AuthService _authService;
+  String? generatedRecoveryKey;
 
   AuthStateNotifier(this._authService) : super(false) {
     checkRegistration();
@@ -57,15 +63,17 @@ class AuthStateNotifier extends StateNotifier<bool> {
     required String masterPassword,
     required String pin,
   }) async {
-    final success = await _authService.registerUser(
+    final recoveryKey = await _authService.registerUser(
       username: username,
       masterPassword: masterPassword,
       pin: pin,
     );
-    if (success) {
+    if (recoveryKey != null) {
+      generatedRecoveryKey = recoveryKey;
       state = true;
+      return true;
     }
-    return success;
+    return false;
   }
 
   Future<bool> loginWithPassword({
@@ -93,6 +101,22 @@ class AuthStateNotifier extends StateNotifier<bool> {
       state = true;
     }
     return success;
+  }
+
+  Future<String?> recoverAccess({
+    required String recoveryKey,
+    required String newMasterPassword,
+    required String newPin,
+  }) async {
+    final key = await _authService.recoverAccess(
+      recoveryKey: recoveryKey,
+      newMasterPassword: newMasterPassword,
+      newPin: newPin,
+    );
+    if (key != null) {
+      state = true;
+    }
+    return key;
   }
 
   Future<void> logout() async {

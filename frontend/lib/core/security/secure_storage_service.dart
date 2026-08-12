@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class SecureStorageService {
@@ -74,6 +75,58 @@ class SecureStorageService {
 
   Future<String?> getPinEncryptedMasterKey() async {
     return await _storage.read(key: _keyPinEncryptedMasterKey);
+  }
+
+  static const String _keyPendingSms = 'pending_sms_transactions';
+
+  Future<void> addPendingSmsTransaction(String jsonTx) async {
+    final existing = await _storage.read(key: _keyPendingSms);
+    List<String> list = [];
+    if (existing != null) {
+      list = List<String>.from(jsonDecode(existing) as List);
+    }
+    list.add(jsonTx);
+    await _storage.write(key: _keyPendingSms, value: jsonEncode(list));
+  }
+
+  Future<List<String>> getPendingSmsTransactions() async {
+    final existing = await _storage.read(key: _keyPendingSms);
+    if (existing == null) return [];
+    return List<String>.from(jsonDecode(existing) as List);
+  }
+
+  Future<void> clearPendingSmsTransactions() async {
+    await _storage.delete(key: _keyPendingSms);
+  }
+
+  static const String _keyRecoveryKeyHash = 'recovery_key_hash';
+  static const String _keyRecoveryEncryptedMasterKey = 'recovery_encrypted_master_key';
+
+  Future<void> saveRecoveryKeyHash(String hash) async {
+    await _storage.write(key: _keyRecoveryKeyHash, value: hash);
+  }
+
+  Future<String?> getRecoveryKeyHash() async {
+    return await _storage.read(key: _keyRecoveryKeyHash);
+  }
+
+  Future<void> saveRecoveryEncryptedMasterKey(String key) async {
+    await _storage.write(key: _keyRecoveryEncryptedMasterKey, value: key);
+  }
+
+  Future<String?> getRecoveryEncryptedMasterKey() async {
+    return await _storage.read(key: _keyRecoveryEncryptedMasterKey);
+  }
+
+  static const String _keySmsEnabled = 'sms_reading_enabled';
+
+  Future<void> saveSmsReadingEnabled(bool enabled) async {
+    await _storage.write(key: _keySmsEnabled, value: enabled ? 'true' : 'false');
+  }
+
+  Future<bool> getSmsReadingEnabled() async {
+    final val = await _storage.read(key: _keySmsEnabled);
+    return val == 'true';
   }
 
   // Clear all secure storage (Logout / Reset)

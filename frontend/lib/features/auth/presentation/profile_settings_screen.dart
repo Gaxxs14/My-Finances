@@ -15,6 +15,7 @@ class ProfileSettingsScreen extends ConsumerStatefulWidget {
 class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
   String _username = '';
   bool _biometricsEnabled = false;
+  bool _smsReadingEnabled = false;
 
   @override
   void initState() {
@@ -26,10 +27,57 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
     final auth = ref.read(authServiceProvider);
     final user = await auth.getUsername();
     final hasBiometrics = await ref.read(secureStorageProvider).getMasterKey() != null;
+    final smsEnabled = await ref.read(secureStorageProvider).getSmsReadingEnabled();
     setState(() {
       _username = user;
       _biometricsEnabled = hasBiometrics;
+      _smsReadingEnabled = smsEnabled;
     });
+  }
+
+  Future<void> _toggleSmsReading(bool enable) async {
+    final storage = ref.read(secureStorageProvider);
+    final smsService = ref.read(smsParserServiceProvider);
+
+    if (enable) {
+      final success = await smsService.initialize();
+      if (success) {
+        await storage.saveSmsReadingEnabled(true);
+        setState(() {
+          _smsReadingEnabled = true;
+        });
+        if (mounted) {
+          SweetAlert.show(
+            context,
+            title: '¡Activado!',
+            description: 'Lectura automática de SMS bancarios activada.',
+            icon: SweetAlertIcon.success,
+          );
+        }
+      } else {
+        if (mounted) {
+          SweetAlert.show(
+            context,
+            title: 'Permiso Denegado',
+            description: 'Se requieren permisos de SMS para activar esta función.',
+            icon: SweetAlertIcon.error,
+          );
+        }
+      }
+    } else {
+      await storage.saveSmsReadingEnabled(false);
+      setState(() {
+        _smsReadingEnabled = false;
+      });
+      if (mounted) {
+        SweetAlert.show(
+          context,
+          title: 'Desactivado',
+          description: 'Lectura automática de SMS bancarios desactivada.',
+          icon: SweetAlertIcon.warning,
+        );
+      }
+    }
   }
 
   Future<void> _changePin() async {
@@ -305,6 +353,15 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
                       value: _biometricsEnabled,
                       activeColor: AppTheme.primaryDark,
                       onChanged: _toggleBiometrics,
+                    ),
+                    const Divider(color: Colors.white10, height: 1),
+                    SwitchListTile(
+                      secondary: const Icon(Icons.sms, color: AppTheme.primaryDark),
+                      title: const Text('Lectura de SMS Bancarios', style: TextStyle(fontWeight: FontWeight.bold)),
+                      subtitle: const Text('Detectar y registrar gastos automáticamente'),
+                      value: _smsReadingEnabled,
+                      activeColor: AppTheme.primaryDark,
+                      onChanged: _toggleSmsReading,
                     ),
                   ],
                 ),
