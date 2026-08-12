@@ -18,14 +18,6 @@ namespace MyFinances.API.Models
         [MaxLength(200)]
         public string? PinHash { get; set; }
 
-        [MaxLength(100)]
-        public string? TelegramChatId { get; set; }
-
-        [MaxLength(20)]
-        public string? TelegramLinkToken { get; set; }
-
-        public DateTime? TelegramLinkTokenExpires { get; set; }
-
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     }
 }

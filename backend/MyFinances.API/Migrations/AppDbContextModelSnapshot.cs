@@ -55,7 +55,7 @@ namespace MyFinances.API.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("Accounts");
+                    b.ToTable("Accounts", (string)null);
                 });
 
             modelBuilder.Entity("MyFinances.API.Models.PasswordCredential", b =>
@@ -94,7 +94,7 @@ namespace MyFinances.API.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("Credentials");
+                    b.ToTable("Credentials", (string)null);
                 });
 
             modelBuilder.Entity("MyFinances.API.Models.Transaction", b =>
@@ -130,7 +130,7 @@ namespace MyFinances.API.Migrations
 
                     b.HasIndex("AccountId");
 
-                    b.ToTable("Transactions");
+                    b.ToTable("Transactions", (string)null);
                 });
 
             modelBuilder.Entity("MyFinances.API.Models.User", b =>
@@ -150,17 +150,6 @@ namespace MyFinances.API.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
-                    b.Property<string>("TelegramChatId")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<string>("TelegramLinkToken")
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.Property<DateTime?>("TelegramLinkTokenExpires")
-                        .HasColumnType("timestamp with time zone");
-
                     b.Property<string>("Username")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -171,7 +160,7 @@ namespace MyFinances.API.Migrations
                     b.HasIndex("Username")
                         .IsUnique();
 
-                    b.ToTable("Users");
+                    b.ToTable("Users", (string)null);
                 });
 
             modelBuilder.Entity("MyFinances.API.Models.Account", b =>
