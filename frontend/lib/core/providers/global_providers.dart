@@ -129,6 +129,14 @@ final recentTransactionsProvider = FutureProvider<List<Map<String, dynamic>>>((r
   }
 });
 
+final accountsListProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
+  try {
+    return await ref.watch(localTransactionRepositoryProvider).getAccounts();
+  } catch (_) {
+    return [];
+  }
+});
+
 final decryptedCredentialsProvider = FutureProvider<List<Map<String, String>>>((ref) async {
   try {
     return await ref.watch(localPasswordRepositoryProvider).getCredentials();

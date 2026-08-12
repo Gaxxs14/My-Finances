@@ -47,12 +47,26 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       ref.invalidate(dashboardSummaryProvider);
       ref.invalidate(recentTransactionsProvider);
       ref.invalidate(categorySummaryProvider);
+      ref.invalidate(accountsListProvider);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Sincronización con la nube exitosa.'), backgroundColor: AppTheme.accentDark),
+        const SnackBar(
+          content: Text('Sincronización con la nube exitosa.'),
+          backgroundColor: AppTheme.accentDark,
+          behavior: SnackBarBehavior.floating,
+        ),
       );
     } catch (e) {
+      String userFriendlyMessage = 'Error de sincronización. Intenta de nuevo.';
+      final errStr = e.toString();
+      if (errStr.contains('SocketException') || errStr.contains('Failed host lookup') || errStr.contains('connection error')) {
+        userFriendlyMessage = 'Sin conexión a internet. Sincronización pausada.';
+      }
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error de sincronización: $e'), backgroundColor: Colors.redAccent),
+        SnackBar(
+          content: Text(userFriendlyMessage),
+          backgroundColor: Colors.redAccent,
+          behavior: SnackBarBehavior.floating,
+        ),
       );
     } finally {
       setState(() => _isSyncing = false);
@@ -331,6 +345,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   ref.invalidate(dashboardSummaryProvider);
                   ref.invalidate(recentTransactionsProvider);
                   ref.invalidate(categorySummaryProvider);
+                  ref.invalidate(accountsListProvider);
                   
                   Navigator.pop(ctx);
                 }
@@ -469,7 +484,108 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 error: (err, stack) => Text('Error: $err'),
               ),
               
-              const SizedBox(height: 20),
+              const SizedBox(height: 24),
+
+              // Row: "Mis Cuentas" + Plus Button
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Mis Cuentas',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.add_circle_outline, color: AppTheme.primaryDark),
+                    onPressed: _showCreateAccountDialog,
+                    tooltip: 'Agregar nueva cuenta',
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+
+              // Horizontal list of accounts cards
+              ref.watch(accountsListProvider).when(
+                data: (accounts) {
+                  if (accounts.isEmpty) return const SizedBox.shrink();
+                  return SizedBox(
+                    height: 90,
+                    child: ListView.builder(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: accounts.length,
+                      itemBuilder: (context, index) {
+                        final acc = accounts[index];
+                        final type = acc['type'] as String;
+                        IconData icon;
+                        Color iconColor;
+                        switch (type) {
+                          case 'card':
+                            icon = Icons.credit_card;
+                            iconColor = Colors.tealAccent;
+                            break;
+                          case 'bank':
+                            icon = Icons.account_balance;
+                            iconColor = Colors.blueAccent;
+                            break;
+                          case 'cash':
+                            icon = Icons.attach_money;
+                            iconColor = Colors.greenAccent;
+                            break;
+                          default:
+                            icon = Icons.savings;
+                            iconColor = Colors.purpleAccent;
+                        }
+
+                        return Container(
+                          width: 150,
+                          margin: const EdgeInsets.only(right: 12),
+                          child: Card(
+                            elevation: 2,
+                            color: AppTheme.surfaceDark.withOpacity(0.5),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              side: const BorderSide(color: Colors.white10),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 10.0),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Icon(icon, color: iconColor, size: 18),
+                                      const SizedBox(width: 6),
+                                      Expanded(
+                                        child: Text(
+                                          acc['name'] as String,
+                                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    currencyFormat.format(acc['balance'] ?? 0.0),
+                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.white),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  );
+                },
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (_, __) => const SizedBox.shrink(),
+              ),
+
+              const SizedBox(height: 24),
 
               // 2. Interactive Expenses Pie Chart (Only if expenses exist)
               categorySummaryAsync.when(

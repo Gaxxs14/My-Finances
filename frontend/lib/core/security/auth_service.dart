@@ -1,7 +1,5 @@
 import 'dart:convert';
-import 'dart:math';
 import 'package:crypto/crypto.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../database/db_helper.dart';
 import 'biometric_service.dart';
 import 'encryption_service.dart';
@@ -23,9 +21,6 @@ class AuthService {
         _biometricService = biometricService,
         _dbHelper = dbHelper;
 
-  static const String _keyUsername = 'auth_username';
-  static const String _keyPinEncryptedMasterKey = 'pin_encrypted_master_key';
-
   // Check if a user is registered locally
   Future<bool> isUserRegistered() async {
     final savedUsername = await _getSavedUsername();
@@ -33,8 +28,7 @@ class AuthService {
   }
 
   Future<String?> _getSavedUsername() async {
-    const storage = FlutterSecureStorage();
-    return await storage.read(key: _keyUsername);
+    return await _secureStorage.getUsername();
   }
 
   // Register user with Username, Master Password, and PIN
@@ -60,14 +54,11 @@ class AuthService {
       // This allows PIN-based logins to decrypt the DB key
       final pinEncryptedKey = _encryptionService.encryptWithKey(masterKeyString, vaultKey);
 
-      // 4. Save credentials to secure hardware storage
+      // 4. Save credentials to secure hardware storage (via consistent SecureStorageService)
       await _secureStorage.saveUserPin(pinHash); // Storing pin hash
       await _secureStorage.saveMasterKey(masterKeyString); // Direct key for biometric login
-      
-      // Store auxiliary values in secure storage
-      final storage = const FlutterSecureStorage();
-      await storage.write(key: _keyUsername, value: username);
-      await storage.write(key: _keyPinEncryptedMasterKey, value: pinEncryptedKey);
+      await _secureStorage.saveUsername(username);
+      await _secureStorage.savePinEncryptedMasterKey(pinEncryptedKey);
 
       // 5. Unlock the local database
       await _dbHelper.initDatabase(masterKeyString);
@@ -80,15 +71,13 @@ class AuthService {
 
   // Get current registered username
   Future<String> getUsername() async {
-    final storage = const FlutterSecureStorage();
-    return await storage.read(key: _keyUsername) ?? '';
+    return await _secureStorage.getUsername() ?? '';
   }
 
   // Login using Username + Master Password
   Future<bool> loginWithPassword(String username, String masterPassword) async {
     try {
-      final storage = const FlutterSecureStorage();
-      final savedUsername = await storage.read(key: _keyUsername);
+      final savedUsername = await _secureStorage.getUsername();
       if (savedUsername == null || savedUsername.toLowerCase() != username.toLowerCase()) {
         return false;
       }
@@ -113,10 +102,9 @@ class AuthService {
   // Login using PIN code
   Future<bool> loginWithPin(String pin) async {
     try {
-      final storage = const FlutterSecureStorage();
-      final username = await storage.read(key: _keyUsername);
+      final username = await _secureStorage.getUsername();
       final savedPinHash = await _secureStorage.getUserPin();
-      final pinEncryptedKey = await storage.read(key: _keyPinEncryptedMasterKey);
+      final pinEncryptedKey = await _secureStorage.getPinEncryptedMasterKey();
 
       if (username == null || savedPinHash == null || pinEncryptedKey == null) {
         return false;

@@ -58,8 +58,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with TickerProviderSt
         _savedUsername = username;
         _loginUserCtrl.text = username;
       });
-      // Auto trigger biometrics for faster entry
-      _triggerBiometrics();
     }
   }
 

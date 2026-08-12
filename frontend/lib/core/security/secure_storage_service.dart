@@ -57,6 +57,25 @@ class SecureStorageService {
     await _storage.delete(key: _keyJwtToken);
   }
 
+  static const String _keyUsername = 'auth_username';
+  static const String _keyPinEncryptedMasterKey = 'pin_encrypted_master_key';
+
+  Future<void> saveUsername(String username) async {
+    await _storage.write(key: _keyUsername, value: username);
+  }
+
+  Future<String?> getUsername() async {
+    return await _storage.read(key: _keyUsername);
+  }
+
+  Future<void> savePinEncryptedMasterKey(String key) async {
+    await _storage.write(key: _keyPinEncryptedMasterKey, value: key);
+  }
+
+  Future<String?> getPinEncryptedMasterKey() async {
+    return await _storage.read(key: _keyPinEncryptedMasterKey);
+  }
+
   // Clear all secure storage (Logout / Reset)
   Future<void> clearAll() async {
     await _storage.deleteAll();
