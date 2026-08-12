@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../password_manager/presentation/password_vault_screen.dart';
 import '../../password_manager/presentation/password_auditor_screen.dart';
 import '../../transactions/presentation/budget_manager_screen.dart';
+import '../../auth/presentation/profile_settings_screen.dart';
 import 'dashboard_screen.dart';
 import '../../../core/theme/app_theme.dart';
 
@@ -20,6 +21,7 @@ class _HomeScreenState extends State<HomeScreen> {
     BudgetManagerScreen(),
     PasswordVaultScreen(),
     PasswordAuditorScreen(),
+    ProfileSettingsScreen(),
   ];
 
   @override
@@ -61,6 +63,11 @@ class _HomeScreenState extends State<HomeScreen> {
             icon: Icon(Icons.security_outlined),
             activeIcon: Icon(Icons.security),
             label: 'Auditoría',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.person_outline),
+            activeIcon: Icon(Icons.person),
+            label: 'Perfil',
           ),
         ],
       ),

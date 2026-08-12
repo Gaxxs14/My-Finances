@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/providers/global_providers.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/sweet_alert.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -104,31 +105,68 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with TickerProviderSt
   Future<void> _processPasswordLogin() async {
     if (_loginUserCtrl.text.isEmpty || _loginPassCtrl.text.isEmpty) return;
 
-    final success = await ref.read(authStateProvider.notifier).loginWithPassword(
-      username: _loginUserCtrl.text,
-      masterPassword: _loginPassCtrl.text,
-    );
+    try {
+      final success = await ref.read(authStateProvider.notifier).loginWithPassword(
+        username: _loginUserCtrl.text,
+        masterPassword: _loginPassCtrl.text,
+      );
 
-    if (!success) {
+      if (!success) {
+        setState(() {
+          _errorMessage = 'Usuario o Contraseña incorrectos.';
+        });
+      }
+    } catch (e) {
       setState(() {
-        _errorMessage = 'Usuario o Contraseña incorrectos.';
+        _errorMessage = e.toString().replaceAll('Exception: ', '').replaceAll('SocketException: ', '');
       });
+      if (mounted) {
+        SweetAlert.show(
+          context,
+          title: 'Error de Conexión',
+          description: _errorMessage,
+          icon: SweetAlertIcon.warning,
+        );
+      }
     }
   }
 
   Future<void> _processRegister() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final success = await ref.read(authStateProvider.notifier).register(
-      username: _regUserCtrl.text,
-      masterPassword: _regPassCtrl.text,
-      pin: _regPinCtrl.text,
-    );
+    try {
+      final success = await ref.read(authStateProvider.notifier).register(
+        username: _regUserCtrl.text,
+        masterPassword: _regPassCtrl.text,
+        pin: _regPinCtrl.text,
+      );
 
-    if (!success) {
+      if (!success) {
+        setState(() {
+          _errorMessage = 'Error al registrar el usuario. Reintenta.';
+        });
+      } else {
+        if (mounted) {
+          SweetAlert.show(
+            context,
+            title: '¡Bóveda Creada!',
+            description: 'Tu bóveda se ha registrado en la nube y desbloqueado localmente con éxito.',
+            icon: SweetAlertIcon.success,
+          );
+        }
+      }
+    } catch (e) {
       setState(() {
-        _errorMessage = 'Error al registrar el usuario. Reintenta.';
+        _errorMessage = e.toString().replaceAll('Exception: ', '').replaceAll('SocketException: ', '');
       });
+      if (mounted) {
+        SweetAlert.show(
+          context,
+          title: 'Error de Registro',
+          description: _errorMessage,
+          icon: SweetAlertIcon.error,
+        );
+      }
     }
   }
 

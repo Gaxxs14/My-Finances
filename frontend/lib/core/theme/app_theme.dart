@@ -2,17 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class AppTheme {
-  // Brand colors
-  static const Color primaryDark = Color(0xFF6366F1); // Indigo
-  static const Color primaryLight = Color(0xFF4F46E5); // Indigo Darker
+  // Brand colors (Ultra-Premium Obsidian Space & Gold palette)
+  static const Color primaryDark = Color(0xFFE2B65C); // Luxury Warm Gold
+  static const Color primaryLight = Color(0xFFB88E3C); // Darker Gold for Light Theme
   
-  static const Color accentDark = Color(0xFF10B981); // Emerald Green
-  static const Color accentLight = Color(0xFF059669); // Emerald Darker
+  static const Color accentDark = Color(0xFF00FF87); // Glowing Neon Emerald Green
+  static const Color accentLight = Color(0xFF00B894); // Dark Emerald Green for Light Theme
 
-  static const Color backgroundDark = Color(0xFF0F172A); // Slate 900
-  static const Color surfaceDark = Color(0xFF1E293B); // Slate 800
-  static const Color textPrimaryDark = Color(0xFFF8FAFC); // Slate 50
-  static const Color textSecondaryDark = Color(0xFF94A3B8); // Slate 400
+  static const Color backgroundDark = Color(0xFF05050A); // Pure Obsidian Space Black
+  static const Color surfaceDark = Color(0xFF0D0E15); // Slate Obsidian Black
+  static const Color textPrimaryDark = Color(0xFFFFFFFF); // Pure White
+  static const Color textSecondaryDark = Color(0xFF8E9AAF); // Slate Silver Grey
 
   static const Color backgroundLight = Color(0xFFF8FAFC); // Slate 50
   static const Color surfaceLight = Color(0xFFFFFFFF);

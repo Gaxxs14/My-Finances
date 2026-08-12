@@ -1,7 +1,9 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:dio/dio.dart';
 import '../../../core/providers/global_providers.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../accounts/presentation/nfc_scanner_sheet.dart';
@@ -57,9 +59,16 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       );
     } catch (e) {
       String userFriendlyMessage = 'Error de sincronización. Intenta de nuevo.';
-      final errStr = e.toString();
-      if (errStr.contains('SocketException') || errStr.contains('Failed host lookup') || errStr.contains('connection error')) {
-        userFriendlyMessage = 'Sin conexión a internet. Sincronización pausada.';
+      if (e is DioException) {
+        if (e.type == DioExceptionType.connectionTimeout || 
+            e.type == DioExceptionType.receiveTimeout || 
+            e.type == DioExceptionType.sendTimeout) {
+          userFriendlyMessage = 'El servidor en la nube está despertando. Reintenta en unos segundos.';
+        } else if (e.type == DioExceptionType.connectionError || e.error is SocketException) {
+          userFriendlyMessage = 'No se pudo conectar al servidor. Sincronización pausada.';
+        } else if (e.response?.statusCode == 401) {
+          userFriendlyMessage = 'Error de autorización (401). Verifica tus credenciales.';
+        }
       }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -407,7 +416,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     child: Container(
                       decoration: BoxDecoration(
                         gradient: const LinearGradient(
-                          colors: [AppTheme.primaryDark, Color(0xFF818CF8)],
+                          colors: [AppTheme.primaryDark, Color(0xFF9C7A3C)],
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                         ),

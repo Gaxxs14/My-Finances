@@ -31,6 +31,7 @@ final authServiceProvider = Provider<AuthService>((ref) {
     encryptionService: ref.watch(encryptionProvider),
     biometricService: ref.watch(biometricProvider),
     dbHelper: ref.watch(dbHelperProvider),
+    apiClient: ref.watch(apiClientProvider),
   );
 });
 
