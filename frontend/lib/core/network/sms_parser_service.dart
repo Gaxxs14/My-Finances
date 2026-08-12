@@ -112,7 +112,6 @@ void backpageMessageHandler(SmsMessage message) async {
       await storage.write(key: keyPendingSms, value: jsonEncode(list));
     }
   }
-}
 
 class SmsParserService {
   final Telephony _telephony = Telephony.instance;
