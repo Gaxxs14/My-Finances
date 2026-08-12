@@ -1,4 +1,3 @@
-import 'package:dio/dio.dart';
 import 'package:sqflite_sqlcipher/sqflite.dart';
 import '../database/db_helper.dart';
 import 'api_client.dart';

@@ -180,7 +180,6 @@ final categorySummaryProvider = FutureProvider<Map<String, double>>((ref) async 
 
 final apiClientProvider = Provider<ApiClient>((ref) {
   // Use http://10.0.2.2:5227 for Android Emulator connection to PC, or http://localhost:5227 for iOS/Web
-  const String localUrl = 'http://10.0.2.2:5227';
   const String productionUrl = 'https://my-finances-9kah.onrender.com';
   return ApiClient(
     baseUrl: productionUrl, // Using production URL by default

@@ -27,7 +27,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with TickerProviderSt
   final List<int> _pinInput = [];
   bool _isRegistering = false;
   String _errorMessage = '';
-  String _savedUsername = '';
 
   @override
   void initState() {
@@ -56,7 +55,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with TickerProviderSt
     if (isRegistered) {
       final username = await ref.read(authServiceProvider).getUsername();
       setState(() {
-        _savedUsername = username;
         _loginUserCtrl.text = username;
       });
     }

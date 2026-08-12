@@ -17,7 +17,6 @@ class SecureStorageService {
   static const String _keyMasterKey = 'master_key';
   static const String _keyUserPin = 'user_pin';
   static const String _keyJwtToken = 'jwt_token';
-  static const String _keyRefreshToken = 'refresh_token';
 
   // Master Key for AES Encryption
   Future<void> saveMasterKey(String masterKey) async {
