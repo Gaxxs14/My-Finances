@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/providers/global_providers.dart';
 import '../../../core/theme/app_theme.dart';
@@ -75,6 +76,39 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
           title: 'Desactivado',
           description: 'Lectura automática de SMS bancarios desactivada.',
           icon: SweetAlertIcon.warning,
+        );
+      }
+    }
+  }
+
+  Future<void> _generateTelegramLinkCode() async {
+    try {
+      final apiClient = ref.read(apiClientProvider);
+      final response = await apiClient.get('/api/telegram/link-code');
+      final code = response.data['code']?.toString();
+
+      if (code != null && mounted) {
+        Clipboard.setData(ClipboardData(text: '/link $code'));
+        SweetAlert.show(
+          context,
+          title: 'Vincular Telegram 🤖',
+          description: '1. Abre Telegram y busca al bot: @MyFinancesBot\n\n'
+              '2. Envía este comando (YA COPIADO en tu portapapeles):\n\n'
+              '/link $code\n\n'
+              '⚠️ El código expira en 10 minutos.',
+          confirmButtonText: 'Listo, Cerrar',
+          icon: SweetAlertIcon.success,
+        );
+      } else {
+        throw Exception();
+      }
+    } catch (_) {
+      if (mounted) {
+        SweetAlert.show(
+          context,
+          title: 'Servidor Desconectado',
+          description: 'No se pudo generar el código. Asegúrate de tener conexión y de que el servidor en la nube esté despierto.',
+          icon: SweetAlertIcon.error,
         );
       }
     }
@@ -362,6 +396,14 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
                       value: _smsReadingEnabled,
                       activeColor: AppTheme.primaryDark,
                       onChanged: _toggleSmsReading,
+                    ),
+                    const Divider(color: Colors.white10, height: 1),
+                    ListTile(
+                      leading: const Icon(Icons.telegram, color: AppTheme.primaryDark),
+                      title: const Text('Vincular Bot de Telegram', style: TextStyle(fontWeight: FontWeight.bold)),
+                      subtitle: const Text('Generar código de vinculación para el asistente'),
+                      trailing: const Icon(Icons.key, color: AppTheme.textSecondaryDark),
+                      onTap: _generateTelegramLinkCode,
                     ),
                   ],
                 ),
