@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class AppTheme {
-  // Brand colors (Ultra-Premium Obsidian Space & Gold palette)
-  static const Color primaryDark = Color(0xFFE2B65C); // Luxury Warm Gold
-  static const Color primaryLight = Color(0xFFB88E3C); // Darker Gold for Light Theme
+  // Brand colors (Logo-inspired Emerald & Cyan palette)
+  static const Color primaryDark = Color(0xFF10B981); // Emerald Green
+  static const Color primaryLight = Color(0xFF0D9488); // Teal Emerald
   
-  static const Color accentDark = Color(0xFF00FF87); // Glowing Neon Emerald Green
-  static const Color accentLight = Color(0xFF00B894); // Dark Emerald Green for Light Theme
+  static const Color accentDark = Color(0xFF06B6D4); // Electric Cyan
+  static const Color accentLight = Color(0xFF0284C7); // Cyan Blue
 
   static const Color backgroundDark = Color(0xFF05050A); // Pure Obsidian Space Black
   static const Color surfaceDark = Color(0xFF0D0E15); // Slate Obsidian Black
@@ -110,6 +110,13 @@ class AppTheme {
           borderSide: const BorderSide(color: primaryLight, width: 2),
         ),
         hintStyle: TextStyle(color: textSecondaryLight.withOpacity(0.7)),
+      ),
+      dialogTheme: DialogThemeData(
+        backgroundColor: surfaceLight,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      ),
+      bottomSheetTheme: const BottomSheetThemeData(
+        backgroundColor: surfaceLight,
       ),
     );
   }

@@ -19,27 +19,39 @@ class SyncService {
       
       // 1. Fetch all local accounts
       final List<Map<String, dynamic>> localAccounts = await db.query('accounts');
-      if (localAccounts.isEmpty) return;
 
-      // 2. Push to C# backend
-      final response = await _apiClient.post('/api/sync/accounts', data: localAccounts);
+      // Reformat map to match C# Account DTO (boolean isActive, Pascal/camelCase)
+      final payload = localAccounts.map((acc) {
+        return {
+          'id': acc['id'],
+          'name': acc['name'],
+          'type': acc['type'],
+          'balance': acc['balance'],
+          'currency': acc['currency'] ?? 'USD',
+          'isActive': acc['is_active'] == 1 || acc['is_active'] == true,
+        };
+      }).toList();
+
+      // 2. Push to C# backend & fetch server records
+      final response = await _apiClient.post('/api/sync/accounts', data: payload);
       
-      if (response.statusCode == 200) {
+      if (response.statusCode == 200 && response.data != null) {
         final List<dynamic> serverAccounts = response.data as List<dynamic>;
         
         // 3. Update local database with server records to ensure parity
         await db.transaction((txn) async {
           for (var item in serverAccounts) {
-            final acc = item as Map<String, dynamic>;
+            final acc = Map<String, dynamic>.from(item as Map);
             await txn.insert(
               'accounts',
               {
-                'id': acc['id'],
-                'name': acc['name'],
-                'type': acc['type'],
-                'balance': double.parse(acc['balance'].toString()),
-                'currency': acc['currency'],
-                'is_active': acc['isActive'] == true ? 1 : 0,
+                'id': acc['id'] ?? acc['Id'],
+                'name': acc['name'] ?? acc['Name'],
+                'type': acc['type'] ?? acc['Type'] ?? 'bank',
+                'balance': double.parse((acc['balance'] ?? acc['Balance'] ?? 0.0).toString()),
+                'currency': acc['currency'] ?? acc['Currency'] ?? 'USD',
+                'color': acc['color'] ?? acc['Color'] ?? '#1E40AF',
+                'is_active': (acc['isActive'] == true || acc['IsActive'] == true || acc['is_active'] == 1) ? 1 : 0,
               },
               conflictAlgorithm: ConflictAlgorithm.replace,
             );
@@ -156,6 +168,16 @@ class SyncService {
       }
     } catch (e) {
       rethrow;
+    }
+  }
+
+  // --- RESET CLOUD DATA ---
+  Future<bool> resetCloudData() async {
+    try {
+      final response = await _apiClient.post('/api/sync/reset');
+      return response.statusCode == 200;
+    } catch (_) {
+      return false;
     }
   }
 

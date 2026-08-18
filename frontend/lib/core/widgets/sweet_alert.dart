@@ -9,164 +9,185 @@ class SweetAlert {
     required String title,
     required String description,
     required SweetAlertIcon icon,
-    String confirmButtonText = 'OK',
+    String confirmButtonText = 'Entendido',
     String? cancelButtonText,
     VoidCallback? onConfirm,
     VoidCallback? onCancel,
   }) {
-    return showDialog(
+    return showGeneralDialog(
       context: context,
       barrierDismissible: false,
-      barrierColor: Colors.black.withOpacity(0.7),
-      builder: (BuildContext context) {
+      barrierLabel: 'SweetAlert',
+      barrierColor: Colors.black.withOpacity(0.75),
+      transitionDuration: const Duration(milliseconds: 250),
+      pageBuilder: (ctx, anim1, anim2) => const SizedBox.shrink(),
+      transitionBuilder: (context, animation, secondaryAnimation, child) {
+        final curve = CurvedAnimation(parent: animation, curve: Curves.easeOutBack);
+
         Color iconColor;
-        Widget iconWidget;
+        IconData iconData;
+        String defaultBadge;
 
         switch (icon) {
           case SweetAlertIcon.success:
-            iconColor = const Color(0xFF10B981);
-            iconWidget = _AnimatedCheck();
+            iconColor = const Color(0xFF10B981); // Emerald Green
+            iconData = Icons.check_circle_rounded;
+            defaultBadge = 'ÉXITO';
             break;
           case SweetAlertIcon.error:
-            iconColor = Colors.redAccent;
-            iconWidget = _AnimatedCross();
+            iconColor = const Color(0xFFEF4444); // Red
+            iconData = Icons.cancel_rounded;
+            defaultBadge = 'ATENCIÓN';
             break;
           case SweetAlertIcon.warning:
-            iconColor = Colors.amber;
-            iconWidget = _AnimatedWarning();
+            iconColor = const Color(0xFF06B6D4); // Electric Cyan (Matching app brand)
+            iconData = Icons.info_outline_rounded;
+            defaultBadge = 'INFORMACIÓN';
             break;
         }
 
-        return Dialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          backgroundColor: AppTheme.surfaceDark,
-          child: Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // 1. Icon Container
-                Container(
-                  width: 80,
-                  height: 80,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(color: iconColor.withOpacity(0.3), width: 4),
-                    color: iconColor.withOpacity(0.08),
-                  ),
-                  child: Center(child: iconWidget),
-                ),
-                const SizedBox(height: 20),
+        final isDark = Theme.of(context).brightness == Brightness.dark;
 
-                // 2. Title
-                Text(
-                  title,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
+        return ScaleTransition(
+          scale: curve,
+          child: Dialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+            backgroundColor: Theme.of(context).cardColor,
+            elevation: 12,
+            child: Container(
+              padding: const EdgeInsets.all(24.0),
+              decoration: BoxDecoration(
+                color: Theme.of(context).cardColor,
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(color: iconColor.withOpacity(0.3), width: 1.5),
+                boxShadow: [
+                  BoxShadow(
+                    color: iconColor.withOpacity(0.15),
+                    blurRadius: 24,
+                    spreadRadius: 2,
                   ),
-                ),
-                const SizedBox(height: 10),
-
-                // 3. Description
-                Text(
-                  description,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    color: AppTheme.textSecondaryDark,
-                    height: 1.4,
-                  ),
-                ),
-                const SizedBox(height: 24),
-
-                // 4. Buttons Row
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    if (cancelButtonText != null) ...[
-                      TextButton(
-                        onPressed: () {
-                          Navigator.pop(context);
-                          if (onCancel != null) onCancel();
-                        },
-                        child: Text(
-                          cancelButtonText,
-                          style: const TextStyle(color: Colors.grey, fontSize: 16),
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                    ],
-                    ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: iconColor,
-                        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        elevation: 0,
-                      ),
-                      onPressed: () {
-                        Navigator.pop(context);
-                        if (onConfirm != null) onConfirm();
-                      },
-                      child: Text(
-                        confirmButtonText,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Badge pill
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: iconColor.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      defaultBadge,
+                      style: TextStyle(
+                        color: iconColor,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.2,
                       ),
                     ),
-                  ],
-                ),
-              ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Animated Icon Container
+                  Container(
+                    width: 72,
+                    height: 72,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: iconColor.withOpacity(0.12),
+                      border: Border.all(color: iconColor.withOpacity(0.4), width: 3),
+                    ),
+                    child: Icon(
+                      iconData,
+                      size: 40,
+                      color: iconColor,
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+
+                  // Title
+                  Text(
+                    title,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: isDark ? Colors.white : AppTheme.textPrimaryLight,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+
+                  // Description
+                  Text(
+                    description,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: isDark ? AppTheme.textSecondaryDark : AppTheme.textSecondaryLight,
+                      height: 1.45,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Buttons
+                  Row(
+                    children: [
+                      if (cancelButtonText != null) ...[
+                        Expanded(
+                          child: OutlinedButton(
+                            style: OutlinedButton.styleFrom(
+                              side: BorderSide(color: Colors.grey.withOpacity(0.4)),
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                            ),
+                            onPressed: () {
+                              Navigator.pop(context);
+                              if (onCancel != null) onCancel();
+                            },
+                            child: Text(
+                              cancelButtonText,
+                              style: const TextStyle(color: Colors.grey, fontSize: 15, fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                      ],
+                      Expanded(
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: iconColor,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                          ),
+                          onPressed: () {
+                            Navigator.pop(context);
+                            if (onConfirm != null) onConfirm();
+                          },
+                          child: Text(
+                            confirmButtonText,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         );
       },
-    );
-  }
-}
-
-// Checkmark animation
-class _AnimatedCheck extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return const Icon(
-      Icons.check,
-      size: 44,
-      color: Color(0xFF10B981),
-    );
-  }
-}
-
-// Cross animation
-class _AnimatedCross extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return const Icon(
-      Icons.close,
-      size: 44,
-      color: Colors.redAccent,
-    );
-  }
-}
-
-// Warning animation
-class _AnimatedWarning extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return const Text(
-      '!',
-      style: TextStyle(
-        fontSize: 48,
-        fontWeight: FontWeight.bold,
-        color: Colors.amber,
-      ),
     );
   }
 }

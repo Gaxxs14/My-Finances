@@ -1,144 +1,190 @@
-# Documentación del Sistema de Finanzas Personales y Gestor de Contraseñas Seguras
+# Documentación Técnica del Sistema - My Finances (v1.0 Producción)
 
-Este documento detalla la arquitectura recomendada, tecnologías, modelo de seguridad y estrategias de despliegue gratuito en la nube para el desarrollo del sistema robusto de finanzas personales.
-
----
-
-## 1. Arquitectura Tecnológica Recomendada
-
-El sistema se organizará físicamente como un monorepo para facilitar el desarrollo conjunto en el mismo espacio de trabajo, pero manteniendo repositorios de Git independientes.
-
-### Resumen del Stack Tecnológico
-*   **Aplicación Móvil (Frontend):** Flutter (Dart) - Ubicado en `/frontend` (Generará el APK para Android).
-*   **Servidor de Aplicaciones (Backend API):** ASP.NET Core (C#) - Ubicado en `/backend` (Administrará la lógica central, validaciones y sincronización).
-*   **Base de Datos en la Nube:** PostgreSQL (Alojado en Neon.tech).
-*   **Base de Datos Local (Modo Offline y Seguro):** SQLite con SQLCipher (cifrada con AES-256 en el celular).
-
-```
-[ App Flutter (/frontend) ] 
-       │ (Sincronización HTTPS cifrada con SSL Pinning y tokens JWT)
-       ▼
-[ API C# (/backend) ] 
-       │ (Conexión segura SSL)
-       ▼
-[ Base de Datos PostgreSQL (Neon Cloud) ]
-```
+Este documento contiene la especificación técnica completa del funcionamiento, arquitectura, modelo de seguridad, esquemas de datos y manual de mantenimiento del sistema **My Finances**. Está diseñado como referencia definitiva para el uso actual y para guiarse en futuras expansiones y actualizaciones.
 
 ---
 
-## 2. Modelo de Seguridad Extrema (Cero Conocimiento)
+## 1. Visión General del Sistema
 
-Dado que la aplicación almacenará **contraseñas y registros financieros reales**, el sistema debe implementarse bajo el principio de **Zero-Knowledge** (el servidor de la nube nunca debe conocer tus contraseñas en texto plano).
-
-### A. Cifrado en Reposo (Local y Nube)
-1.  **En el celular:**
-    *   Toda información guardada localmente (transacciones, saldos, contraseñas de cuentas bancarias) se almacenará en una base de datos **SQLite cifrada mediante SQLCipher**.
-    *   La clave de cifrado de la base de datos se guardará en el almacenamiento seguro del hardware del celular (`Keystore` en Android) usando el paquete `flutter_secure_storage`.
-2.  **En la base de datos de la nube (Postgres):**
-    *   Los campos sensibles como contraseñas del gestor de cuentas se enviarán al servidor **ya encriptados con AES-256 desde el celular**. La llave de desencriptación es una "Clave Maestra" derivada de tu contraseña de usuario, la cual **nunca** se envía al servidor.
-    *   Si la base de datos en la nube es comprometida o hackeada, el atacante solo verá datos cifrados indescifrables.
-
-### B. Cifrado en Tránsito
-*   **HTTPS/TLS:** Toda la comunicación entre Flutter y el backend C# viajará sobre canales cifrados TLS.
-*   **SSL Pinning:** Se configurará la aplicación móvil para que solo confíe en el certificado SSL de tu servidor específico en la nube, evitando ataques de intermediarios (Man-in-the-Middle) en redes Wi-Fi públicas.
-
-### C. Autenticación y Autorización
-*   **Inicio de Sesión:** Autenticación de doble factor simulada o integración con **Autenticación Biométrica** (Huella/Cara) usando las APIs nativas del dispositivo a través de `local_auth`.
-*   **Tokens JWT (JSON Web Tokens):** Una vez que inicias sesión, el backend C# emite un token seguro de corta duración firmado digitalmente para autorizar las peticiones de sincronización.
-*   **Contraseñas de la cuenta:** El hash de tu contraseña de acceso al sistema se guardará en la base de datos utilizando el algoritmo **BCrypt** con un factor de trabajo alto para evitar ataques de fuerza bruta.
+* **Nombre de la Aplicación:** My Finances
+* **Tipo de Aplicación:** Aplicación Móvil Híbrida de Finanzas Personales Multi-moneda + Bóveda de Contraseñas Cifrada.
+* **Filosofía de Arquitectura:** **Local-First Zero-Knowledge** (El dispositivo funciona al 100% offline con base de datos cifrada y sincroniza opcionalmente en la nube de forma transparente).
+* **Servidor Backend:** C# ASP.NET Core Web API en Render (`https://my-finances-9kah.onrender.com`).
+* **Compilado Entregado:** `C:\Users\ggallardo\Desktop\MyFinances.apk` (Android Release, 72.3 MB).
 
 ---
 
-## 3. Infraestructura y Hosting Cloud (100% Gratuito)
+## 2. Stack Tecnológico y Componentes
 
-Para levantar este sistema sin costo alguno, utilizaremos proveedores con capas gratuitas permanentes y robustas.
+### A. Frontend (Aplicación Móvil - `/frontend`)
+* **Framework:** Flutter 3.x (Lenguaje Dart).
+* **Gestión de Estado:** `flutter_riverpod` (Providers globales e inmutables).
+* **Base de Datos Local Cifrada:** `sqflite_sqlcipher` (Base de datos SQLite cifrada mediante AES-256).
+* **Almacenamiento Seguro Nivel Hardware:** `flutter_secure_storage` (Android KeyStore / iOS Keychain).
+* **Cliente HTTP:** `dio` (Con interceptores de autenticación JWT y timeout extendido de 30s).
+* **Hardware Interfacing:**
+  * `nfc_manager` (Lectura y detección de tarjetas físicas NFC).
+  * `local_auth` (Autenticación por huella dactilar / FaceID).
+  * `image_picker` (Cámara y Galería para foto de perfil).
 
-### A. Base de Datos en la Nube: Neon.tech
-*   **Servicio:** PostgreSQL Serverless.
-*   **Costo:** Gratis para 1 proyecto (hasta 0.5 GB de almacenamiento).
-*   **Seguridad:** Conexión segura obligatoria, backups automáticos de los últimos 7 días.
-
-### B. Servidor API en C#: Koyeb o Render
-*   **Servicio:** Alojamiento de contenedores Docker.
-*   **Costo:** Capa gratuita permanente para 1 micro-instancia.
-*   **Detalle:** El backend en C# se empaquetará dentro de un contenedor Docker ligero. Koyeb/Render detectarán el código en GitHub y compilarán automáticamente el contenedor.
-*   *Nota de Render:* En la capa gratuita, el servidor se "duerme" tras 15 minutos sin peticiones. Tardará unos 30 segundos en reactivarse con la primera petición.
-
-### C. Repositorio y Despliegue Automático (CI/CD): GitHub
-*   **Servicio:** Control de versiones Git.
-*   **Flujo:** Al hacer `git push` a la rama `main` en GitHub, Koyeb/Render automáticamente descargarán el código, pasarán las pruebas y publicarán los cambios en el servidor en vivo sin intervención manual.
-
----
-
-## 4. Estructura y Organización del Código
-
-Para mantener un proyecto robusto que no se vuelva caótico al crecer, se aplicará **Arquitectura Limpia (Clean Architecture)**.
-
-### Estructura General del Workspace
-```text
-My-Finances/
-├── DOCUMENTACION.md             # Este archivo
-├── frontend/                   # Proyecto Flutter
-│   ├── lib/
-│   ├── pubspec.yaml
-│   └── ...
-└── backend/                    # Proyecto C# .NET API
-    ├── MyFinances.API/
-    ├── MyFinances.Domain/
-    ├── MyFinances.Infrastructure/
-    └── ...
-```
-
-### Estructura de la Aplicación Flutter (`/frontend`)
-```
-frontend/lib/
-├── core/                        # Configuración e infraestructura compartida
-│   ├── network/                 # Cliente HTTP (Dio), interceptores de seguridad
-│   ├── security/                # Utilidades de encriptación AES y llavero seguro
-│   ├── theme/                   # Diseño visual, colores y tipografía premium
-│   └── utils/                   # Clases de ayuda y validaciones
-│
-├── features/                    # Módulos independientes de la aplicación
-│   ├── auth/                    # Login, Registro, Biometría
-│   │   ├── data/                # Modelos y fuentes de datos (remoto/local)
-│   │   ├── domain/              # Lógica de negocio pura (Casos de Uso)
-│   │   └── presentation/        # Pantallas, widgets y controladores (UI)
-│   │
-│   ├── dashboard/               # Resumen financiero, gráficos
-│   ├── transactions/            # Registro de gastos, ahorros e ingresos
-│   └── password_manager/        # Gestor de contraseñas de cuentas encriptado
-│
-└── main.dart                    # Punto de entrada de la aplicación
-```
-
-### Estructura del Backend C# (`/backend`)
-```
-backend/
-├── MyFinances.API/              # Controladores HTTP, Middlewares de seguridad, Configuración JWT
-├── MyFinances.Application/      # Lógica de negocio, DTOs, interfaces de servicio
-├── MyFinances.Domain/           # Entidades financieras puras (Transaction, User, Account)
-└── MyFinances.Infrastructure/   # Conexión a Base de Datos (EF Core, PostgreSQL), Encriptación
-```
+### B. Backend (Servidor Web API - `/backend`)
+* **Lenguaje y Framework:** C# ASP.NET Core 9 Web API (`backend/MyFinances.API`).
+* **ORM:** Entity Framework Core (EF Core 9).
+* **Base de Datos en la Nube:** PostgreSQL Alojado en Render Cloud.
+* **Autenticación:** JWT Bearer Token (`Microsoft.AspNetCore.Authentication.JwtBearer`).
+* **Cifrado de Contraseñas Servidor:** BCrypt.Net.
 
 ---
 
-## 5. Estrategia de Control de Versiones (Git y GitHub)
+## 3. Modelo de Seguridad Zero-Knowledge
 
-Dado que cuentas con repositorios creados en tu cuenta de GitHub, seguiremos las siguientes directrices:
+1. **Cifrado en Reposo (Teléfono):**
+   - El archivo `my_finances_secure.db` está cifrado físicamente con **SQLCipher (AES-256)**.
+   - La clave maestra de cifrado de la base de datos se deriva de la combinación del usuario y contraseña maestra del usuario (mediante PBKDF2/SHA-256).
+   - Ningún archivo plano ni contraseña se guarda sin cifrar.
 
-1.  **Ramas Principales:**
-    *   `main`: Contiene el código de producción listo para compilar la APK final y desplegar el backend estable en producción.
-    *   `develop`: Rama de integración donde se consolidan las nuevas funciones antes de ir a producción.
-2.  **Ramas de Características (`feature/`):**
-    *   Cada nueva funcionalidad (ej: `feature/biometric-auth`, `feature/database-setup`) se desarrolla en una rama separada nacida de `develop` y se une mediante un *Pull Request* revisado.
-3.  **Seguridad en Git:**
-    *   Queda estrictamente prohibido subir claves de API, contraseñas de bases de datos o llaves de firma al repositorio de GitHub. Todos estos datos se manejarán como variables de entorno (`.env` o Secrets en la plataforma de la nube).
+2. **Cifrado en Tránsito (Red):**
+   - Toda la comunicación con `https://my-finances-9kah.onrender.com` viaja por canales cifrados TLS/HTTPS.
+   - El Token JWT emite una validez de 7 días y se re-autentica automáticamente en segundo plano.
+
+3. **Bóveda de Credenciales:**
+   - Las contraseñas del módulo "Bóveda" se cifran con AES-256 en el teléfono **antes** de sincronizarse con la nube. El servidor en Render solo almacena blobs cifrados indescifrables.
 
 ---
 
-## 6. Siguientes Pasos Recomendados
+## 4. Esquema de Base de Datos Local (SQLite SQLCipher v3)
 
-1.  **Crear las subcarpetas `/frontend` y `/backend`**.
-2.  **Inicialización de Flutter:** Crear el proyecto móvil en `/frontend`.
-3.  **Enlazar Repositorio Local con GitHub:** Clonar o agregar las direcciones remotas correspondientes en cada subcarpeta.
-4.  **Configuración de Dependencias:** Modificar el `pubspec.yaml` de la app móvil.
+### Tabla `accounts` (Cuentas y Tarjetas)
+```sql
+CREATE TABLE accounts (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  type TEXT NOT NULL,       -- 'bank', 'card', 'cash', 'savings'
+  balance REAL NOT NULL DEFAULT 0.0, -- Guardado en Moneda Base USD
+  currency TEXT NOT NULL DEFAULT 'USD',
+  color TEXT,               -- Código Hexadecimal (ej: '#1E40AF')
+  is_active INTEGER NOT NULL DEFAULT 1
+);
+```
+
+### Tabla `transactions` (Ingresos y Gastos)
+```sql
+CREATE TABLE transactions (
+  id TEXT PRIMARY KEY,
+  account_id TEXT NOT NULL,
+  type TEXT NOT NULL,       -- 'income', 'expense', 'savings'
+  amount REAL NOT NULL,     -- Guardado en Moneda Base USD
+  currency TEXT NOT NULL DEFAULT 'VES', -- Moneda original del registro
+  category TEXT NOT NULL,
+  description TEXT,
+  date TEXT NOT NULL,       -- Cadena de texto ISO 8601
+  is_synced INTEGER NOT NULL DEFAULT 0,
+  FOREIGN KEY (account_id) REFERENCES accounts (id) ON DELETE CASCADE
+);
+```
+
+### Tabla `password_vault` (Bóveda de Credenciales Cifrada)
+```sql
+CREATE TABLE password_vault (
+  id TEXT PRIMARY KEY,
+  service_name TEXT NOT NULL,
+  username TEXT NOT NULL,
+  encrypted_password TEXT NOT NULL,
+  website_url TEXT,
+  encrypted_notes TEXT,
+  updated_at TEXT NOT NULL
+);
+```
+
+### Tabla `savings_goals` (Metas de Ahorro)
+```sql
+CREATE TABLE savings_goals (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  target_amount REAL NOT NULL,
+  current_amount REAL NOT NULL DEFAULT 0.0,
+  target_date TEXT,
+  icon_name TEXT,
+  color_hex TEXT,
+  is_completed INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL
+);
+```
+
+### Tabla `recurring_payments` (Pagos Fijos y Suscripciones)
+```sql
+CREATE TABLE recurring_payments (
+  id TEXT PRIMARY KEY,
+  account_id TEXT,
+  name TEXT NOT NULL,
+  amount REAL NOT NULL,
+  currency TEXT NOT NULL DEFAULT 'VES',
+  category TEXT NOT NULL,
+  due_day INTEGER NOT NULL,
+  icon_name TEXT,
+  is_active INTEGER NOT NULL DEFAULT 1,
+  last_paid_month TEXT
+);
+```
+
+---
+
+## 5. Lógica de Ingeniería Financiera y Conversión
+
+1. **Almacenamiento Base Unificado:**
+   - Todos los saldos de cuentas y importes de transacciones se calculan e insertan internamente en la base de datos local en **Base USD**.
+2. **Conversión en Tiempo Real (Bs. VES):**
+   - Cuando la app muestra montos en Bolívares (modo por defecto), invoca `_formatAmount(amountInUsd, bcvRate)` que calcula: `amountInUsd * bcvRate`.
+3. **Registro Multi-Moneda:**
+   - Al registrar una transacción en **Bs. VES**, el sistema calcula `montoUsd = montoIngresado / bcvRate` antes de insertar en la base de datos.
+   - De esta forma, registrar 150 Bs. a una tasa de 764.35 se guarda como `0.1962 USD` y se renderiza exactamente como **`150,00 Bs.`**.
+4. **Reversión de Saldos al Eliminar:**
+   - Al tocar el ícono de papelera 🗑️ en un movimiento, la función `deleteTransaction` ejecuta una transacción atómica que invierte el impacto financiero en la tarjeta correspondiente (`balance += amount` para gastos, `balance -= amount` para ingresos) y elimina la fila de SQLite.
+
+---
+
+## 6. Endpoints del Backend C# (`https://my-finances-9kah.onrender.com`)
+
+| Método | Endpoint | Descripción | DTO / Payload Esperado |
+|---|---|---|---|
+| `POST` | `/api/auth/register` | Registro inicial de usuario en la nube | `{"username": "...", "password": "..."}` |
+| `POST` | `/api/auth/login` | Inicio de sesión para obtener Token JWT | `{"username": "...", "password": "..."}` |
+| `POST` | `/api/sync/accounts` | Sincronización bidireccional de cuentas | `[{"id": "...", "name": "...", "type": "...", "balance": 0.0, "currency": "USD", "isActive": true}]` |
+| `POST` | `/api/sync/transactions` | Sincronización bidireccional de transacciones | `[{"id": "...", "accountId": "...", "type": "...", "amount": 0.0, "category": "...", "description": "...", "date": "..."}]` |
+| `POST` | `/api/sync/credentials` | Sincronización de credenciales cifradas | `[{"id": "...", "serviceName": "...", "username": "...", "encryptedPassword": "...", ...}]` |
+| `POST` | `/api/sync/reset` | Borrado completo de datos del usuario en Render | Requiere Header `Authorization: Bearer <TokenJWT>` |
+
+---
+
+## 7. Manual para Futuras Actualizaciones y Mantenimiento
+
+### A. ¿Cómo actualizar la aplicación Flutter?
+1. Abre la terminal en la carpeta `/frontend`.
+2. Para probar en modo de desarrollo:
+   ```bash
+   flutter run
+   ```
+3. Para compilar una nueva versión del APK de producción:
+   ```bash
+   flutter build apk --release
+   ```
+4. El APK resultante se generará en:
+   `frontend/build/app/outputs/flutter-apk/app-release.apk`
+
+### B. ¿Cómo desplegar cambios en el Backend C# en Render?
+1. El proyecto en C# se ubica en `/backend/MyFinances.API`.
+2. Al realizar cambios en C# y subir los commits a la rama principal de tu repositorio en GitHub:
+   ```bash
+   git add .
+   git commit -m "Actualización del backend"
+   git push origin main
+   ```
+3. Render detectará el push y recompilará automáticamente el contenedor Docker en vivo.
+
+### C. Restablecimiento total de prueba:
+Para limpiar por completo cualquier dato de prueba:
+1. En la app móvil: Ve a **Perfil** -> **Cerrar Sesión y Restablecer Dispositivo**.
+2. La app enviará una llamada a `/api/sync/reset` en Render para borrar el servidor, eliminará el archivo `my_finances_secure.db` local del teléfono y dejará todo listo para un inicio limpio.
+
+---
+*Documentación generada y verificada para la versión 1.0 de Producción.*

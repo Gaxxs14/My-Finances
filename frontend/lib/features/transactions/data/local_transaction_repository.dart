@@ -18,6 +18,13 @@ class LocalTransactionRepository {
     await _db.insert('accounts', account, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
+  Future<void> deleteAccount(String accountId) async {
+    await _db.transaction((txn) async {
+      await txn.delete('transactions', where: 'account_id = ?', whereArgs: [accountId]);
+      await txn.delete('accounts', where: 'id = ?', whereArgs: [accountId]);
+    });
+  }
+
   // --- TRANSACTIONS ---
 
   Future<List<Map<String, dynamic>>> getTransactions({String? accountId, int limit = 50}) async {
@@ -65,6 +72,48 @@ class LocalTransactionRepository {
           where: 'id = ?',
           whereArgs: [accountId],
         );
+      }
+    });
+  }
+
+  Future<void> deleteTransaction(String transactionId) async {
+    await _db.transaction((txn) async {
+      final List<Map<String, dynamic>> res = await txn.query(
+        'transactions',
+        where: 'id = ?',
+        whereArgs: [transactionId],
+      );
+
+      if (res.isNotEmpty) {
+        final tx = res.first;
+        final double amount = (tx['amount'] as num).toDouble();
+        final String type = tx['type'] as String;
+        final String accountId = tx['account_id'] as String;
+
+        final List<Map<String, dynamic>> accRes = await txn.query(
+          'accounts',
+          columns: ['balance'],
+          where: 'id = ?',
+          whereArgs: [accountId],
+        );
+
+        if (accRes.isNotEmpty) {
+          double currentBalance = (accRes.first['balance'] as num).toDouble();
+          if (type == 'income') {
+            currentBalance -= amount;
+          } else if (type == 'expense' || type == 'savings') {
+            currentBalance += amount;
+          }
+
+          await txn.update(
+            'accounts',
+            {'balance': currentBalance},
+            where: 'id = ?',
+            whereArgs: [accountId],
+          );
+        }
+
+        await txn.delete('transactions', where: 'id = ?', whereArgs: [transactionId]);
       }
     });
   }

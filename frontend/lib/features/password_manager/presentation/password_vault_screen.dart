@@ -1,8 +1,12 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/providers/global_providers.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/app_text_field.dart';
+import '../../../core/widgets/app_toast.dart';
+import '../../../core/widgets/sweet_alert.dart';
 
 class PasswordVaultScreen extends ConsumerStatefulWidget {
   const PasswordVaultScreen({super.key});
@@ -20,28 +24,48 @@ class _PasswordVaultScreenState extends ConsumerState<PasswordVaultScreen> {
     final id = isEdit ? credentialToEdit['id']! : DateTime.now().millisecondsSinceEpoch.toString();
     
     final formKey = GlobalKey<FormState>();
-    String serviceName = isEdit ? credentialToEdit['serviceName']! : '';
-    String username = isEdit ? credentialToEdit['username']! : '';
-    String password = isEdit ? credentialToEdit['password']! : '';
-    String websiteUrl = isEdit ? credentialToEdit['websiteUrl']! : '';
-    String notes = isEdit ? credentialToEdit['notes']! : '';
+    final serviceCtrl = TextEditingController(text: isEdit ? credentialToEdit['serviceName']! : '');
+    final userCtrl = TextEditingController(text: isEdit ? credentialToEdit['username']! : '');
+    final passCtrl = TextEditingController(text: isEdit ? credentialToEdit['password']! : '');
+    final urlCtrl = TextEditingController(text: isEdit ? credentialToEdit['websiteUrl']! : '');
+    final notesCtrl = TextEditingController(text: isEdit ? credentialToEdit['notes']! : '');
+    String selectedCategory = 'banco';
+
+    void generateSecurePassword(StateSetter setModalState) {
+      const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#\$%^&*()';
+      final rnd = Random.secure();
+      final newPass = List.generate(16, (index) => chars[rnd.nextInt(chars.length)]).join();
+      setModalState(() {
+        passCtrl.text = newPass;
+      });
+      AppToast.show(context, message: '🎲 ¡Contraseña segura de 16 caracteres generada!', type: AppToastType.success);
+    }
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: AppTheme.surfaceDark,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
+      backgroundColor: Colors.transparent,
       builder: (ctx) {
         return StatefulBuilder(
           builder: (context, setModalState) {
-            return Padding(
+            return Container(
               padding: EdgeInsets.only(
                 left: 20,
                 right: 20,
-                top: 24,
+                top: 16,
                 bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+              ),
+              decoration: BoxDecoration(
+                color: Theme.of(context).cardColor,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+                border: Border.all(color: Theme.of(context).brightness == Brightness.dark ? Colors.white.withOpacity(0.15) : Colors.black12, width: 1.5),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.3),
+                    blurRadius: 32,
+                    spreadRadius: 4,
+                  ),
+                ],
               ),
               child: Form(
                 key: formKey,
@@ -50,99 +74,148 @@ class _PasswordVaultScreenState extends ConsumerState<PasswordVaultScreen> {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Text(
-                        isEdit ? 'Editar Credencial' : 'Nueva Credencial Cifrada',
-                        style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                              fontSize: 20,
+                      // Drag handle
+                      Center(
+                        child: Container(
+                          width: 40,
+                          height: 4,
+                          margin: const EdgeInsets.only(bottom: 16),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).brightness == Brightness.dark ? Colors.white24 : Colors.black26,
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                      ),
+
+                      // Header with Shield Badge
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: AppTheme.primaryDark.withOpacity(0.2),
+                              shape: BoxShape.circle,
+                              border: Border.all(color: AppTheme.primaryDark.withOpacity(0.4)),
                             ),
+                            child: const Icon(Icons.shield_outlined, color: AppTheme.primaryDark, size: 24),
+                          ),
+                          const SizedBox(width: 12),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                isEdit ? 'Editar Credencial' : 'Nueva Credencial Cifrada',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: Theme.of(context).brightness == Brightness.dark ? Colors.white : AppTheme.textPrimaryLight,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'Protegida con Cifrado Grado Militar AES-256',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Theme.of(context).brightness == Brightness.dark ? AppTheme.textSecondaryDark : AppTheme.textSecondaryLight,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 20),
 
-                      // Service Name Input
-                      TextFormField(
-                        initialValue: serviceName,
-                        decoration: const InputDecoration(
-                          labelText: 'Nombre del Servicio / Banco',
-                          prefixIcon: Icon(Icons.business_outlined),
-                        ),
-                        validator: (value) => (value == null || value.isEmpty) ? 'Requerido' : null,
-                        onSaved: (val) => serviceName = val!,
+                      // Service / Bank Name
+                      AppTextField(
+                        controller: serviceCtrl,
+                        labelText: 'Nombre del Servicio / Banco (ej. BNC, Gmail)',
+                        prefixIcon: Icons.account_balance_outlined,
+                        validator: (val) => (val == null || val.isEmpty) ? 'Campo requerido' : null,
                       ),
                       const SizedBox(height: 12),
 
-                      // Username Input
-                      TextFormField(
-                        initialValue: username,
-                        decoration: const InputDecoration(
-                          labelText: 'Usuario / Correo',
-                          prefixIcon: Icon(Icons.person_outline),
-                        ),
-                        validator: (value) => (value == null || value.isEmpty) ? 'Requerido' : null,
-                        onSaved: (val) => username = val!,
+                      // Username / Email
+                      AppTextField(
+                        controller: userCtrl,
+                        labelText: 'Usuario / Correo Electrónico',
+                        prefixIcon: Icons.person_outline,
+                        validator: (val) => (val == null || val.isEmpty) ? 'Campo requerido' : null,
                       ),
                       const SizedBox(height: 12),
 
-                      // Password Input
-                      TextFormField(
-                        initialValue: password,
-                        decoration: const InputDecoration(
-                          labelText: 'Contraseña',
-                          prefixIcon: Icon(Icons.password_outlined),
-                        ),
-                        obscureText: true,
-                        validator: (value) => (value == null || value.isEmpty) ? 'Requerido' : null,
-                        onSaved: (val) => password = val!,
+                      // Password with Random Generator button 🎲
+                      Row(
+                        children: [
+                          Expanded(
+                            child: AppTextField(
+                              controller: passCtrl,
+                              labelText: 'Contraseña',
+                              prefixIcon: Icons.lock_outline,
+                              isPassword: true,
+                              validator: (val) => (val == null || val.isEmpty) ? 'Campo requerido' : null,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          IconButton(
+                            icon: const Icon(Icons.casino_outlined, color: AppTheme.primaryDark, size: 28),
+                            tooltip: 'Generar Contraseña Segura',
+                            onPressed: () => generateSecurePassword(setModalState),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 12),
 
                       // Website URL Input (Optional)
-                      TextFormField(
-                        initialValue: websiteUrl,
-                        decoration: const InputDecoration(
-                          labelText: 'URL del Sitio Web (Opcional)',
-                          prefixIcon: Icon(Icons.link_outlined),
-                        ),
-                        onSaved: (val) => websiteUrl = val ?? '',
+                      AppTextField(
+                        controller: urlCtrl,
+                        labelText: 'URL del Sitio Web (Opcional)',
+                        prefixIcon: Icons.language_outlined,
                       ),
                       const SizedBox(height: 12),
 
                       // Notes Input (Optional)
-                      TextFormField(
-                        initialValue: notes,
-                        maxLines: 2,
-                        decoration: const InputDecoration(
-                          labelText: 'Notas / PIN de Seguridad (Opcional)',
-                          prefixIcon: Icon(Icons.note_alt_outlined),
-                        ),
-                        onSaved: (val) => notes = val ?? '',
+                      AppTextField(
+                        controller: notesCtrl,
+                        labelText: 'Notas / PIN de Seguridad (Opcional)',
+                        prefixIcon: Icons.note_alt_outlined,
                       ),
                       const SizedBox(height: 24),
 
-                      // Submit Button
-                      ElevatedButton(
-                        onPressed: () async {
-                          if (formKey.currentState!.validate()) {
-                            formKey.currentState!.save();
-
-                            await ref.read(localPasswordRepositoryProvider).saveCredential(
-                              id: id,
-                              serviceName: serviceName,
-                              username: username,
-                              clearPassword: password,
-                              websiteUrl: websiteUrl,
-                              clearNotes: notes,
-                            );
-
-                            ref.invalidate(decryptedCredentialsProvider);
-                            Navigator.pop(ctx);
-                          }
-                        },
+                      // Save Button
+                      ElevatedButton.icon(
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppTheme.primaryDark,
                           padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          elevation: 4,
                         ),
-                        child: Text(isEdit ? 'Guardar Cambios' : 'Añadir a Bóveda', style: const TextStyle(color: Colors.white, fontSize: 16)),
+                        icon: const Icon(Icons.lock_rounded, color: Colors.white, size: 20),
+                        label: Text(
+                          isEdit ? 'Guardar Cambios' : '🔐 Añadir a Bóveda Cifrada',
+                          style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                        ),
+                        onPressed: () async {
+                          if (formKey.currentState!.validate()) {
+                            await ref.read(localPasswordRepositoryProvider).saveCredential(
+                              id: id,
+                              serviceName: serviceCtrl.text,
+                              username: userCtrl.text,
+                              clearPassword: passCtrl.text,
+                              websiteUrl: urlCtrl.text,
+                              clearNotes: notesCtrl.text,
+                            );
+
+                            ref.invalidate(decryptedCredentialsProvider);
+                            if (ctx.mounted) {
+                              Navigator.pop(ctx);
+                              AppToast.show(
+                                context,
+                                message: '🔐 ¡Credencial "${serviceCtrl.text}" guardada en la bóveda!',
+                                type: AppToastType.success,
+                              );
+                            }
+                          }
+                        },
                       ),
                     ],
                   ),

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 import 'package:dio/dio.dart';
@@ -46,6 +47,7 @@ class AuthService {
   }
 
   // Register on C# backend and store JWT token
+  // If 409 Conflict (user already exists), falls back to login to get a fresh JWT
   Future<bool> registerOnServer(String username, String password) async {
     try {
       final response = await _apiClient.post(
@@ -56,26 +58,32 @@ class AuthService {
         },
       );
       if (response.statusCode == 200 || response.statusCode == 201) {
-        final token = response.data['token'] as String?;
-        if (token != null) {
+        final Map<String, dynamic> data = Map<String, dynamic>.from(response.data as Map);
+        final token = (data['token'] ?? data['Token']) as String?;
+        if (token != null && token.isNotEmpty) {
           await _secureStorage.saveJwtToken(token);
           return true;
         }
       }
       return false;
     } on DioException catch (de) {
-      if (de.type == DioExceptionType.connectionTimeout || 
-          de.type == DioExceptionType.receiveTimeout) {
-        throw const SocketException("El servidor en la nube está despertando. Reintenta en unos segundos.");
+      // 409 = user already exists on server → try logging in to get a fresh JWT
+      if (de.response?.statusCode == 409) {
+        return await loginOnServer(username, password);
       }
-      rethrow;
+      return false;
     } catch (_) {
       return false;
     }
   }
 
-  // Login on C# backend and store JWT token
+  // Login on C# backend and store JWT token (Auto-registers on Render if 401 user not found)
   Future<bool> loginOnServer(String username, String password) async {
+    final res = await loginOnServerDetailed(username, password);
+    return res['success'] == true;
+  }
+
+  Future<Map<String, dynamic>> loginOnServerDetailed(String username, String password) async {
     try {
       final response = await _apiClient.post(
         '/api/auth/login',
@@ -85,21 +93,52 @@ class AuthService {
         },
       );
       if (response.statusCode == 200 || response.statusCode == 201) {
-        final token = response.data['token'] as String?;
-        if (token != null) {
+        final Map<String, dynamic> data = Map<String, dynamic>.from(response.data as Map);
+        final token = (data['token'] ?? data['Token']) as String?;
+        if (token != null && token.isNotEmpty) {
           await _secureStorage.saveJwtToken(token);
-          return true;
+          return {'success': true, 'message': 'OK'};
         }
       }
-      return false;
+      return {'success': false, 'message': 'Respuesta inválida del servidor.'};
     } on DioException catch (de) {
-      if (de.type == DioExceptionType.connectionTimeout || 
-          de.type == DioExceptionType.receiveTimeout) {
-        throw const SocketException("El servidor en la nube está despertando. Reintenta en unos segundos.");
+      if (de.response?.statusCode == 401) {
+        // If 401 Unauthorized (user not created on Render backend yet), try auto-registering on Render!
+        try {
+          final regResp = await _apiClient.post(
+            '/api/auth/register',
+            data: {
+              'username': username,
+              'password': password,
+            },
+          );
+          if (regResp.statusCode == 200 || regResp.statusCode == 201) {
+            final Map<String, dynamic> regData = Map<String, dynamic>.from(regResp.data as Map);
+            final regToken = (regData['token'] ?? regData['Token']) as String?;
+            if (regToken != null && regToken.isNotEmpty) {
+              await _secureStorage.saveJwtToken(regToken);
+              return {'success': true, 'message': 'Cuenta creada en Render con éxito.'};
+            }
+          }
+        } on DioException catch (regDe) {
+          if (regDe.response?.statusCode == 409) {
+            return {
+              'success': false,
+              'message': 'La contraseña no coincide con la cuenta "$username" registrada en Render.'
+            };
+          }
+        } catch (_) {}
+        return {
+          'success': false,
+          'message': 'Contraseña incorrecta para el usuario "$username" en Render.'
+        };
       }
-      rethrow;
+      if (de.type == DioExceptionType.connectionTimeout || de.type == DioExceptionType.receiveTimeout) {
+        return {'success': false, 'message': 'El servidor Render está despertando. Reintenta en 15 segundos.'};
+      }
+      return {'success': false, 'message': 'No se pudo conectar con Render (Servidor offline o sin internet).'};
     } catch (_) {
-      return false;
+      return {'success': false, 'message': 'Error inesperado al conectar con Render.'};
     }
   }
 
@@ -124,8 +163,10 @@ class AuthService {
       // 3. Hash the PIN for local validation
       final pinHash = _encryptionService.hashString(pin, username);
 
-      // 4. Encrypt the Master Key with the PIN hash
-      final pinEncryptedKey = _encryptionService.encryptWithKey(masterKeyString, vaultKey);
+      // 4. Encrypt the Master Key with the PIN-derived key
+      //    (so that loginWithPin can decrypt it using the same PIN-derived key)
+      final pinKey = _encryptionService.deriveKey(pin, username);
+      final pinEncryptedKey = _encryptionService.encryptWithKey(masterKeyString, pinKey);
 
       // 5. Generate Zero-Knowledge Recovery Key
       final recoveryKey = _generateRecoveryKey();
@@ -137,15 +178,13 @@ class AuthService {
       await _secureStorage.saveUserPin(pinHash);
       await _secureStorage.saveMasterKey(masterKeyString);
       await _secureStorage.saveUsername(username);
+      await _secureStorage.saveData('master_pass', masterPassword);
       await _secureStorage.savePinEncryptedMasterKey(pinEncryptedKey);
       await _secureStorage.saveRecoveryKeyHash(recoveryKeyHash);
       await _secureStorage.saveRecoveryEncryptedMasterKey(recoveryEncryptedMasterKey);
 
-      // 7. Unlock the local database
-      await _dbHelper.initDatabase(masterKeyString);
-
-      // 8. Process background pending transactions
-      await processPendingSmsTransactions();
+      // 7. Unlock the local database (fresh vault creation)
+      await _dbHelper.initDatabase(masterKeyString, isNewRegistration: true);
 
       return recoveryKey;
     } catch (e) {
@@ -166,18 +205,28 @@ class AuthService {
         return false;
       }
 
-      // 1. Authenticate with server to fetch fresh JWT token
-      await loginOnServer(username, masterPassword);
-
-      // 2. Re-derive the key from the password
+      // 1. Re-derive the key from the password (local, always works)
       final vaultKey = _encryptionService.deriveKey(masterPassword, username);
       final masterKeyString = base64Url.encode(vaultKey.bytes);
 
-      // 3. Verify key by attempting to unlock the SQLCipher database.
+      // 2. Verify key by attempting to unlock the SQLCipher database FIRST.
+      //    This validates the password locally without needing internet.
       await _dbHelper.initDatabase(masterKeyString);
-      
+
       // Update hardware-secured key
       await _secureStorage.saveMasterKey(masterKeyString);
+
+      // Save master password for background Render JWT token renewal
+      await _secureStorage.saveData('master_pass', masterPassword);
+
+      // 3. Try to authenticate with the Render server to get a fresh JWT token.
+      //    Timeout set to 30s to allow Render free tier backend to spin up.
+      try {
+        await loginOnServer(username, masterPassword)
+            .timeout(const Duration(seconds: 30));
+      } catch (_) {
+        // Server unavailable or spin up in progress
+      }
 
       // 4. Process background pending transactions
       await processPendingSmsTransactions();
@@ -213,6 +262,12 @@ class AuthService {
         // Unlock DB
         await _dbHelper.initDatabase(decryptedMasterKey);
 
+        // Attempt background token renewal on Render if saved master password exists
+        final savedPass = await _secureStorage.readData('master_pass');
+        if (savedPass != null && savedPass.isNotEmpty) {
+          loginOnServer(username, savedPass).ignore();
+        }
+
         // Process background pending transactions
         await processPendingSmsTransactions();
         return true;
@@ -232,18 +287,25 @@ class AuthService {
       if (!hasBiometrics || !isSupported) return false;
 
       final authenticated = await _biometricService.authenticate(
-        localizedReason: 'Inicia sesión de forma segura para acceder a tus finanzas',
+        localizedReason: 'Desbloquea tu Bóveda de Finanzas con tu Huella o Rostro',
       );
 
       if (authenticated) {
         final masterKey = await _secureStorage.getMasterKey();
-        if (masterKey == null) return false;
+        final username = await _secureStorage.getUsername();
+        final savedPass = await _secureStorage.readData('master_pass');
 
-        await _dbHelper.initDatabase(masterKey);
+        if (masterKey != null) {
+          await _dbHelper.initDatabase(masterKey);
 
-        // Process background pending transactions
-        await processPendingSmsTransactions();
-        return true;
+          // Attempt background token renewal on Render if saved master password exists
+          if (username != null && savedPass != null && savedPass.isNotEmpty) {
+            loginOnServer(username, savedPass).ignore();
+          }
+
+          await processPendingSmsTransactions();
+          return true;
+        }
       }
       return false;
     } catch (e) {

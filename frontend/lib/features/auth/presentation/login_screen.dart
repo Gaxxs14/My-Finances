@@ -3,6 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/providers/global_providers.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/sweet_alert.dart';
+import '../../../core/widgets/app_text_field.dart';
+import '../../../core/widgets/app_toast.dart';
+import '../../../core/widgets/gaxxs_loader.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -26,6 +29,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with TickerProviderSt
 
   final List<int> _pinInput = [];
   bool _isRegistering = false;
+  bool _isLoading = false;
+  bool _biometricsEnabled = false;
   String _errorMessage = '';
 
   @override
@@ -54,9 +59,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with TickerProviderSt
 
     if (isRegistered) {
       final username = await ref.read(authServiceProvider).getUsername();
+      // Check if biometrics are enabled (masterKey stored)
+      final masterKey = await ref.read(secureStorageProvider).getMasterKey();
+      final bioEnabled = masterKey != null;
       setState(() {
         _loginUserCtrl.text = username;
+        _biometricsEnabled = bioEnabled;
+        _tabController.index = 1;
       });
+      // Auto-trigger biometrics only if enabled
+      if (bioEnabled) {
+        Future.delayed(const Duration(milliseconds: 300), () {
+          if (mounted) _triggerBiometrics();
+        });
+      }
     }
   }
 
@@ -93,15 +109,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with TickerProviderSt
     setState(() => _pinInput.clear());
 
     final success = await ref.read(authStateProvider.notifier).loginWithPin(pin);
-    if (!success) {
+    if (!success && mounted) {
       setState(() {
         _errorMessage = 'PIN incorrecto. Reintenta.';
       });
+      AppToast.show(context, message: 'PIN incorrecto. Verifícalo e intenta de nuevo.', type: AppToastType.error);
+    } else if (mounted) {
+      AppToast.show(context, message: '¡Bóveda desbloqueada!', type: AppToastType.success);
     }
   }
 
   Future<void> _processPasswordLogin() async {
     if (_loginUserCtrl.text.isEmpty || _loginPassCtrl.text.isEmpty) return;
+    setState(() { _isLoading = true; _errorMessage = ''; });
 
     try {
       final success = await ref.read(authStateProvider.notifier).loginWithPassword(
@@ -109,19 +129,24 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with TickerProviderSt
         masterPassword: _loginPassCtrl.text,
       );
 
-      if (!success) {
+      if (!success && mounted) {
         setState(() {
           _errorMessage = 'Usuario o Contraseña incorrectos.';
+          _isLoading = false;
         });
+        AppToast.show(context, message: 'Credenciales inválidas. Revisa tu usuario y contraseña.', type: AppToastType.error);
+      } else if (mounted) {
+        AppToast.show(context, message: '¡Bienvenido de vuelta!', type: AppToastType.success);
       }
     } catch (e) {
-      setState(() {
-        _errorMessage = e.toString().replaceAll('Exception: ', '').replaceAll('SocketException: ', '');
-      });
       if (mounted) {
+        setState(() {
+          _errorMessage = e.toString().replaceAll('Exception: ', '').replaceAll('SocketException: ', '');
+          _isLoading = false;
+        });
         SweetAlert.show(
           context,
-          title: 'Error de Conexión',
+          title: 'Error',
           description: _errorMessage,
           icon: SweetAlertIcon.warning,
         );
@@ -131,6 +156,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with TickerProviderSt
 
   Future<void> _processRegister() async {
     if (!_formKey.currentState!.validate()) return;
+    setState(() { _isLoading = true; _errorMessage = ''; });
 
     try {
       final success = await ref.read(authStateProvider.notifier).register(
@@ -139,27 +165,25 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with TickerProviderSt
         pin: _regPinCtrl.text,
       );
 
-      if (!success) {
+      if (!success && mounted) {
         setState(() {
           _errorMessage = 'Error al registrar el usuario. Reintenta.';
+          _isLoading = false;
         });
-      } else {
-        final recoveryKey = ref.read(authStateProvider.notifier).generatedRecoveryKey ?? 'No disponible';
-        if (mounted) {
-          SweetAlert.show(
-            context,
-            title: '¡Bóveda Creada!',
-            description: 'Tu bóveda se ha registrado en la nube con éxito.\n\nESTA ES TU CLAVE DE RECUPERACIÓN (Zero-Knowledge):\n\n$recoveryKey\n\nPor favor, cópiala y guárdala en un lugar seguro. Es la única forma de recuperar tu acceso si olvidas tu contraseña.',
-            confirmButtonText: 'Entendido y Copiado',
-            icon: SweetAlertIcon.success,
-          );
-        }
+      } else if (mounted) {
+        SweetAlert.show(
+          context,
+          title: '¡Bóveda Creada!',
+          description: 'Tu bóveda se ha registrado y desbloqueada localmente con éxito.',
+          icon: SweetAlertIcon.success,
+        );
       }
     } catch (e) {
-      setState(() {
-        _errorMessage = e.toString().replaceAll('Exception: ', '').replaceAll('SocketException: ', '');
-      });
       if (mounted) {
+        setState(() {
+          _errorMessage = e.toString().replaceAll('Exception: ', '').replaceAll('SocketException: ', '');
+          _isLoading = false;
+        });
         SweetAlert.show(
           context,
           title: 'Error de Registro',
@@ -293,35 +317,54 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with TickerProviderSt
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  // Logo/Icon
-                  Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: AppTheme.primaryDark.withOpacity(0.1),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.shield_outlined,
-                      color: AppTheme.primaryDark,
-                      size: 50,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
+                  // Clean Vector Emblem Icon (No black square background)
+                  const GaxxsIconMark(size: 60),
+                  const SizedBox(height: 14),
                   Text(
                     'My Finances',
-                    style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 0.5,
-                        ),
+                    style: TextStyle(
+                      fontSize: 26,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 0.5,
+                      color: isDark ? Colors.white : AppTheme.textPrimaryLight,
+                    ),
                   ),
                   const SizedBox(height: 8),
+                  if (!_isRegistering && _loginUserCtrl.text.isNotEmpty) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryDark.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: AppTheme.primaryDark.withOpacity(0.3)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const CircleAvatar(
+                            radius: 12,
+                            backgroundColor: AppTheme.primaryDark,
+                            child: Icon(Icons.person, size: 14, color: Colors.white),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            '¡Hola de nuevo, ${_loginUserCtrl.text.toUpperCase()}!',
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
                   Text(
-                    _isRegistering ? 'Crea tu bóveda criptográfica' : 'Bóveda Cifrada de Extremo a Extremo',
+                    _isRegistering
+                        ? 'Crea tu bóveda criptográfica'
+                        : (_biometricsEnabled ? 'Desbloquea con tu PIN o Huella' : 'Desbloquea con tu PIN'),
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: AppTheme.textSecondaryDark,
                         ),
                   ),
-                  const SizedBox(height: 32),
+                  const SizedBox(height: 28),
 
                   if (_errorMessage.isNotEmpty) ...[
                     Text(
@@ -362,26 +405,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with TickerProviderSt
               const SizedBox(height: 20),
               
               // Username Input
-              TextFormField(
+              AppTextField(
                 controller: _regUserCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Nombre de Usuario',
-                  prefixIcon: Icon(Icons.person_outline),
-                ),
-                style: const TextStyle(color: Colors.white),
+                labelText: 'Nombre de Usuario',
+                prefixIcon: Icons.person_outline,
                 validator: (val) => (val == null || val.isEmpty) ? 'Requerido' : null,
               ),
               const SizedBox(height: 12),
 
               // Master Password Input
-              TextFormField(
+              AppTextField(
                 controller: _regPassCtrl,
-                obscureText: true,
-                decoration: const InputDecoration(
-                  labelText: 'Contraseña Maestra',
-                  prefixIcon: Icon(Icons.password_outlined),
-                ),
-                style: const TextStyle(color: Colors.white),
+                labelText: 'Contraseña Maestra',
+                prefixIcon: Icons.password_outlined,
+                isPassword: true,
                 validator: (val) {
                   if (val == null || val.length < 8) {
                     return 'Debe tener al menos 8 caracteres';
@@ -392,17 +429,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with TickerProviderSt
               const SizedBox(height: 12),
 
               // PIN Input
-              TextFormField(
+              AppTextField(
                 controller: _regPinCtrl,
+                labelText: 'PIN de acceso rápido (4 dígitos)',
+                prefixIcon: Icons.pin_outlined,
+                isPassword: true,
                 keyboardType: TextInputType.number,
-                obscureText: true,
                 maxLength: 4,
-                decoration: const InputDecoration(
-                  labelText: 'PIN de acceso rápido (4 dígitos)',
-                  prefixIcon: Icon(Icons.pin_outlined),
-                  counterText: '',
-                ),
-                style: const TextStyle(color: Colors.white),
                 validator: (val) {
                   if (val == null || val.length != 4 || int.tryParse(val) == null) {
                     return 'Debe ser un PIN de 4 dígitos';
@@ -413,16 +446,22 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with TickerProviderSt
               const SizedBox(height: 24),
 
               ElevatedButton(
-                onPressed: _processRegister,
+                onPressed: _isLoading ? null : _processRegister,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppTheme.primaryDark,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
-                child: const Text(
-                  'Crear Bóveda Segura',
-                  style: TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold),
-                ),
+                child: _isLoading
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                      )
+                    : const Text(
+                        'Crear Bóveda Segura',
+                        style: TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold),
+                      ),
               ),
             ],
           ),
@@ -432,33 +471,35 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with TickerProviderSt
   }
 
   Widget _buildLoginForm() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Column(
       children: [
         // TabBar to switch between Password and PIN login methods
         Container(
           decoration: BoxDecoration(
-            color: AppTheme.surfaceDark.withOpacity(0.5),
+            color: isDark ? AppTheme.surfaceDark.withOpacity(0.5) : Colors.grey[200],
             borderRadius: BorderRadius.circular(12),
           ),
           child: TabBar(
             controller: _tabController,
             indicator: BoxDecoration(
-              color: AppTheme.primaryDark,
+              color: isDark ? AppTheme.primaryDark : AppTheme.primaryLight,
               borderRadius: BorderRadius.circular(12),
             ),
             labelColor: Colors.white,
-            unselectedLabelColor: AppTheme.textSecondaryDark,
+            unselectedLabelColor: isDark ? AppTheme.textSecondaryDark : AppTheme.textSecondaryLight,
             dividerColor: Colors.transparent,
-            tabs: const [
-              Tab(text: 'Contraseña Maestra'),
-              Tab(text: 'PIN / Huella'),
+            tabs: [
+              const Tab(text: 'Contraseña Maestra'),
+              Tab(text: _biometricsEnabled ? 'PIN / Huella' : 'PIN Rápido'),
             ],
           ),
         ),
         const SizedBox(height: 20),
         
         SizedBox(
-          height: 380,
+          height: MediaQuery.of(context).size.height * 0.45,
           child: TabBarView(
             controller: _tabController,
             children: [
@@ -468,36 +509,36 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with TickerProviderSt
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    TextFormField(
+                    AppTextField(
                       controller: _loginUserCtrl,
-                      decoration: const InputDecoration(
-                        labelText: 'Usuario',
-                        prefixIcon: Icon(Icons.person_outline),
-                      ),
-                      style: const TextStyle(color: Colors.white),
+                      labelText: 'Usuario',
+                      prefixIcon: Icons.person_outline,
                     ),
                     const SizedBox(height: 12),
-                    TextFormField(
+                    AppTextField(
                       controller: _loginPassCtrl,
-                      obscureText: true,
-                      decoration: const InputDecoration(
-                        labelText: 'Contraseña Maestra',
-                        prefixIcon: Icon(Icons.password_outlined),
-                      ),
-                      style: const TextStyle(color: Colors.white),
+                      labelText: 'Contraseña Maestra',
+                      prefixIcon: Icons.password_outlined,
+                      isPassword: true,
                     ),
                     const SizedBox(height: 24),
                     ElevatedButton(
-                      onPressed: _processPasswordLogin,
+                      onPressed: _isLoading ? null : _processPasswordLogin,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppTheme.primaryDark,
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
-                      child: const Text(
-                        'Desbloquear Bóveda',
-                        style: TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold),
-                      ),
+                      child: _isLoading
+                          ? const SizedBox(
+                              height: 24,
+                              width: 24,
+                              child: GaxxsLoader(size: 24, showBrandName: false),
+                            )
+                          : const Text(
+                              'Desbloquear Bóveda',
+                              style: TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold),
+                            ),
                     ),
                     const SizedBox(height: 12),
                     TextButton(
@@ -547,11 +588,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with TickerProviderSt
                       itemCount: 12,
                       itemBuilder: (context, index) {
                         if (index == 9) {
-                          // Biometrics Key
-                          return IconButton(
-                            onPressed: _triggerBiometrics,
-                            icon: const Icon(Icons.fingerprint, size: 30, color: AppTheme.primaryDark),
-                          );
+                          // Biometrics Key — only show if enabled
+                          return _biometricsEnabled
+                              ? IconButton(
+                                  onPressed: _triggerBiometrics,
+                                  icon: const Icon(Icons.fingerprint, size: 30, color: AppTheme.primaryDark),
+                                  tooltip: 'Ingresar con huella',
+                                )
+                              : const SizedBox.shrink();
                         } else if (index == 10) {
                           // Zero Key
                           return _buildPinKey(0);
@@ -578,19 +622,25 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with TickerProviderSt
   }
 
   Widget _buildPinKey(int value) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return InkWell(
       onTap: () => _onKeyPress(value),
       borderRadius: BorderRadius.circular(16),
       child: Container(
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: AppTheme.surfaceDark.withOpacity(0.3),
+          color: isDark ? AppTheme.surfaceDark.withOpacity(0.5) : Colors.white,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppTheme.primaryDark.withOpacity(0.1)),
+          border: Border.all(color: isDark ? Colors.white.withOpacity(0.1) : Colors.grey[300]!),
+          boxShadow: isDark ? [] : [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 6, offset: const Offset(0, 2))],
         ),
         child: Text(
           '$value',
-          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
+          style: TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+            color: isDark ? Colors.white : AppTheme.textPrimaryLight,
+          ),
         ),
       ),
     );

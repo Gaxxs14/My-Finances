@@ -38,9 +38,9 @@ class _HomeScreenState extends State<HomeScreen> {
             _currentIndex = index;
           });
         },
-        selectedItemColor: AppTheme.primaryDark,
-        unselectedItemColor: AppTheme.textSecondaryDark,
-        backgroundColor: AppTheme.surfaceDark,
+        selectedItemColor: Theme.of(context).brightness == Brightness.dark ? AppTheme.primaryDark : AppTheme.primaryLight,
+        unselectedItemColor: Theme.of(context).brightness == Brightness.dark ? AppTheme.textSecondaryDark : AppTheme.textSecondaryLight,
+        backgroundColor: Theme.of(context).brightness == Brightness.dark ? AppTheme.surfaceDark : Colors.white,
         elevation: 8,
         type: BottomNavigationBarType.fixed,
         items: const [

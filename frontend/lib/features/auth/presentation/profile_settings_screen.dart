@@ -1,9 +1,13 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../../core/providers/global_providers.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/theme_provider.dart';
 import '../../../core/widgets/sweet_alert.dart';
+import '../../../core/widgets/app_toast.dart';
 
 class ProfileSettingsScreen extends ConsumerStatefulWidget {
   const ProfileSettingsScreen({super.key});
@@ -14,8 +18,12 @@ class ProfileSettingsScreen extends ConsumerStatefulWidget {
 
 class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
   String _username = '';
+  String _selectedAvatar = '👤';
+  String? _profileImagePath;
+  bool _isBlackAndWhiteMode = false;
   bool _biometricsEnabled = false;
   bool _smsReadingEnabled = false;
+  final _imagePicker = ImagePicker();
 
   @override
   void initState() {
@@ -28,11 +36,163 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
     final user = await auth.getUsername();
     final hasBiometrics = await ref.read(secureStorageProvider).getMasterKey() != null;
     final smsEnabled = await ref.read(secureStorageProvider).getSmsReadingEnabled();
+    final avatar = await ref.read(secureStorageProvider).readData('user_avatar') ?? '👤';
+    final imagePath = await ref.read(secureStorageProvider).readData('user_photo_path');
+    final bwMode = ref.read(appThemeModeProvider) == ThemeMode.light;
+
     setState(() {
       _username = user;
       _biometricsEnabled = hasBiometrics;
       _smsReadingEnabled = smsEnabled;
+      _selectedAvatar = avatar;
+      _profileImagePath = (imagePath != null && File(imagePath).existsSync()) ? imagePath : null;
+      _isBlackAndWhiteMode = bwMode;
     });
+  }
+
+  Future<void> _pickProfileImage(ImageSource source) async {
+    try {
+      final XFile? picked = await _imagePicker.pickImage(
+        source: source,
+        maxWidth: 512,
+        maxHeight: 512,
+        imageQuality: 85,
+      );
+      if (picked == null) return;
+      await ref.read(secureStorageProvider).saveData('user_photo_path', picked.path);
+      setState(() => _profileImagePath = picked.path);
+      if (mounted) {
+        AppToast.show(context, message: '✅ Foto de perfil actualizada', type: AppToastType.success);
+      }
+    } catch (e) {
+      if (mounted) {
+        AppToast.show(context, message: 'Error al seleccionar foto: $e', type: AppToastType.error);
+      }
+    }
+  }
+
+  void _showAvatarPicker() {
+    final avatars = ['👤', '🧑‍💻', '🦁', '⚡', '💎', '👑', '🚀', '🦊', '🦸', '🔥'];
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Theme.of(context).cardColor,
+        title: Text(
+          'Foto / Icono de Perfil',
+          style: TextStyle(
+            color: isDark ? Colors.white : AppTheme.textPrimaryLight,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Real Photo Buttons
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      icon: const Icon(Icons.camera_alt_rounded, size: 18),
+                      label: const Text('Cámara', style: TextStyle(fontSize: 13)),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppTheme.primaryDark,
+                        side: const BorderSide(color: AppTheme.primaryDark),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                      ),
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        _pickProfileImage(ImageSource.camera);
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      icon: const Icon(Icons.photo_library_rounded, size: 18),
+                      label: const Text('Galería', style: TextStyle(fontSize: 13)),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppTheme.accentDark,
+                        side: const BorderSide(color: AppTheme.accentDark),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                      ),
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        _pickProfileImage(ImageSource.gallery);
+                      },
+                    ),
+                  ),
+                ],
+              ),
+              if (_profileImagePath != null) ...[
+                const SizedBox(height: 8),
+                TextButton.icon(
+                  icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 16),
+                  label: const Text('Quitar foto', style: TextStyle(color: Colors.redAccent, fontSize: 12)),
+                  onPressed: () async {
+                    await ref.read(secureStorageProvider).saveData('user_photo_path', '');
+                    setState(() => _profileImagePath = null);
+                    if (ctx.mounted) Navigator.pop(ctx);
+                    AppToast.show(context, message: 'Foto de perfil eliminada', type: AppToastType.info);
+                  },
+                ),
+              ],
+              const Divider(height: 20),
+              Text(
+                'O elige un ícono',
+                style: TextStyle(
+                  color: isDark ? Colors.white54 : Colors.black45,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                alignment: WrapAlignment.center,
+                children: avatars.map((av) {
+                  return GestureDetector(
+                    onTap: () async {
+                      await ref.read(secureStorageProvider).saveData('user_avatar', av);
+                      setState(() => _selectedAvatar = av);
+                      if (ctx.mounted) Navigator.pop(ctx);
+                      AppToast.show(context, message: '¡Ícono actualizado!', type: AppToastType.success);
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: _selectedAvatar == av ? AppTheme.primaryDark.withOpacity(0.3) : (isDark ? Colors.black26 : Colors.grey[200]),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: _selectedAvatar == av ? AppTheme.primaryDark : (isDark ? Colors.white10 : Colors.black12)),
+                      ),
+                      child: Text(av, style: const TextStyle(fontSize: 28)),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _toggleBlackAndWhiteMode(bool enable) async {
+    await ref.read(appThemeModeProvider.notifier).setThemeMode(enable ? ThemeMode.light : ThemeMode.dark);
+    setState(() {
+      _isBlackAndWhiteMode = enable;
+    });
+    if (mounted) {
+      AppToast.show(
+        context,
+        message: enable ? '🎨 Modo Blanco y Negro Activado' : '🌈 Modo Color Original Activado',
+        type: AppToastType.info,
+      );
+    }
   }
 
   Future<void> _toggleSmsReading(bool enable) async {
@@ -80,10 +240,9 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
     }
   }
 
-
-
   Future<void> _changePin() async {
     final formKey = GlobalKey<FormState>();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     String currentPin = '';
     String newPin = '';
 
@@ -91,15 +250,29 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
       context: context,
       builder: (ctx) {
         return AlertDialog(
-          backgroundColor: AppTheme.surfaceDark,
-          title: const Text('Modificar PIN de Acceso', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          backgroundColor: Theme.of(context).cardColor,
+          title: Text(
+            'Modificar PIN de Acceso',
+            style: TextStyle(
+              color: isDark ? Colors.white : AppTheme.textPrimaryLight,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
           content: Form(
             key: formKey,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 TextFormField(
-                  decoration: const InputDecoration(labelText: 'PIN Actual', prefixIcon: Icon(Icons.lock_outline)),
+                  decoration: InputDecoration(
+                    labelText: 'PIN Actual',
+                    prefixIcon: const Icon(Icons.lock_outline, color: AppTheme.primaryDark),
+                    filled: true,
+                    fillColor: isDark ? Colors.black26 : Colors.grey[100],
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    labelStyle: TextStyle(color: isDark ? Colors.white70 : AppTheme.textSecondaryLight),
+                  ),
+                  style: TextStyle(color: isDark ? Colors.white : AppTheme.textPrimaryLight, fontSize: 16, fontWeight: FontWeight.bold),
                   keyboardType: TextInputType.number,
                   obscureText: true,
                   maxLength: 4,
@@ -108,7 +281,15 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
                 ),
                 const SizedBox(height: 12),
                 TextFormField(
-                  decoration: const InputDecoration(labelText: 'Nuevo PIN', prefixIcon: Icon(Icons.fiber_pin_outlined)),
+                  decoration: InputDecoration(
+                    labelText: 'Nuevo PIN',
+                    prefixIcon: const Icon(Icons.fiber_pin_outlined, color: AppTheme.primaryDark),
+                    filled: true,
+                    fillColor: isDark ? Colors.black26 : Colors.grey[100],
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    labelStyle: TextStyle(color: isDark ? Colors.white70 : AppTheme.textSecondaryLight),
+                  ),
+                  style: TextStyle(color: isDark ? Colors.white : AppTheme.textPrimaryLight, fontSize: 16, fontWeight: FontWeight.bold),
                   keyboardType: TextInputType.number,
                   obscureText: true,
                   maxLength: 4,
@@ -120,12 +301,15 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
           ),
           actions: [
             TextButton(
-              child: const Text('Cancelar'),
+              child: Text('Cancelar', style: TextStyle(color: isDark ? Colors.white70 : AppTheme.textSecondaryLight)),
               onPressed: () => Navigator.pop(ctx),
             ),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryDark),
-              child: const Text('Guardar', style: TextStyle(color: Colors.white)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primaryDark,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              child: const Text('Guardar', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
               onPressed: () {
                 if (formKey.currentState!.validate()) {
                   formKey.currentState!.save();
@@ -216,25 +400,43 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
     } else {
       // Enable biometrics: ask password to verify and store master key copy
       final passCtrl = TextEditingController();
+      final isDark = Theme.of(context).brightness == Brightness.dark;
       await showDialog(
         context: context,
         builder: (ctx) {
           return AlertDialog(
-            backgroundColor: AppTheme.surfaceDark,
-            title: const Text('Activar Huella / Rostro', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            backgroundColor: Theme.of(context).cardColor,
+            title: Text(
+              'Activar Huella / Rostro',
+              style: TextStyle(
+                color: isDark ? Colors.white : AppTheme.textPrimaryLight,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
             content: TextFormField(
               controller: passCtrl,
-              decoration: const InputDecoration(labelText: 'Ingresa tu Contraseña Maestra', prefixIcon: Icon(Icons.password_outlined)),
+              decoration: InputDecoration(
+                labelText: 'Ingresa tu Contraseña Maestra',
+                prefixIcon: const Icon(Icons.password_outlined, color: AppTheme.primaryDark),
+                filled: true,
+                fillColor: isDark ? Colors.black26 : Colors.grey[100],
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                labelStyle: TextStyle(color: isDark ? Colors.white70 : AppTheme.textSecondaryLight),
+              ),
+              style: TextStyle(color: isDark ? Colors.white : AppTheme.textPrimaryLight, fontSize: 15),
               obscureText: true,
             ),
             actions: [
               TextButton(
-                child: const Text('Cancelar'),
+                child: Text('Cancelar', style: TextStyle(color: isDark ? Colors.white70 : AppTheme.textSecondaryLight)),
                 onPressed: () => Navigator.pop(ctx),
               ),
               ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryDark),
-                child: const Text('Verificar', style: TextStyle(color: Colors.white)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.primaryDark,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                child: const Text('Verificar', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                 onPressed: () => Navigator.pop(ctx, true),
               ),
             ],
@@ -293,31 +495,73 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
             children: [
               // User header card
               Card(
-                color: AppTheme.surfaceDark.withOpacity(0.5),
+                color: Theme.of(context).cardColor,
+                elevation: Theme.of(context).brightness == Brightness.light ? 2 : 0,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  side: const BorderSide(color: Colors.white10),
+                  borderRadius: BorderRadius.circular(20),
+                  side: BorderSide(color: Theme.of(context).brightness == Brightness.dark ? Colors.white10 : Colors.black12),
                 ),
                 child: Padding(
                   padding: const EdgeInsets.all(20.0),
                   child: Row(
                     children: [
-                      const CircleAvatar(
-                        radius: 30,
-                        backgroundColor: AppTheme.primaryDark,
-                        child: Icon(Icons.person, size: 36, color: Colors.white),
+                      GestureDetector(
+                        onTap: _showAvatarPicker,
+                        child: Stack(
+                          children: [
+                            CircleAvatar(
+                              radius: 34,
+                              backgroundColor: AppTheme.primaryDark,
+                              backgroundImage: _profileImagePath != null
+                                  ? FileImage(File(_profileImagePath!))
+                                  : null,
+                              child: _profileImagePath == null
+                                  ? Text(_selectedAvatar, style: const TextStyle(fontSize: 32))
+                                  : null,
+                            ),
+                            Positioned(
+                              bottom: 0,
+                              right: 0,
+                              child: Container(
+                                padding: const EdgeInsets.all(4),
+                                decoration: const BoxDecoration(
+                                  color: AppTheme.accentDark,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(Icons.camera_alt, size: 12, color: Colors.black),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                       const SizedBox(width: 16),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('Usuario Registrado', style: TextStyle(color: AppTheme.textSecondaryDark, fontSize: 12)),
-                          const SizedBox(height: 4),
-                          Text(
-                            _username.toUpperCase(),
-                            style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
-                          ),
-                        ],
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Usuario Registrado',
+                              style: TextStyle(
+                                color: Theme.of(context).brightness == Brightness.dark ? AppTheme.textSecondaryDark : AppTheme.textSecondaryLight,
+                                fontSize: 12,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              _username.toUpperCase(),
+                              style: TextStyle(
+                                color: Theme.of(context).brightness == Brightness.dark ? Colors.white : AppTheme.textPrimaryLight,
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            GestureDetector(
+                              onTap: _showAvatarPicker,
+                              child: const Text('Toca para cambiar foto/icono', style: TextStyle(color: AppTheme.primaryDark, fontSize: 11, fontWeight: FontWeight.w600)),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
@@ -326,17 +570,18 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
               const SizedBox(height: 24),
 
               Text(
-                'Ajustes de Seguridad',
+                'Ajustes de Seguridad y Apariencia',
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 12),
 
               // Security configuration list
               Card(
-                color: AppTheme.surfaceDark.withOpacity(0.3),
+                color: Theme.of(context).cardColor,
+                elevation: Theme.of(context).brightness == Brightness.light ? 2 : 0,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),
-                  side: const BorderSide(color: Colors.white10),
+                  side: BorderSide(color: Theme.of(context).brightness == Brightness.dark ? Colors.white10 : Colors.black12),
                 ),
                 child: Column(
                   children: [
@@ -344,10 +589,10 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
                       leading: const Icon(Icons.fiber_pin, color: AppTheme.primaryDark),
                       title: const Text('Modificar PIN de Acceso', style: TextStyle(fontWeight: FontWeight.bold)),
                       subtitle: const Text('Cambiar el PIN de 4 dígitos para desbloqueo rápido'),
-                      trailing: const Icon(Icons.chevron_right, color: AppTheme.textSecondaryDark),
+                      trailing: const Icon(Icons.chevron_right),
                       onTap: _changePin,
                     ),
-                    const Divider(color: Colors.white10, height: 1),
+                    const Divider(height: 1),
                     SwitchListTile(
                       secondary: const Icon(Icons.fingerprint, color: AppTheme.primaryDark),
                       title: const Text('Autenticación Biométrica', style: TextStyle(fontWeight: FontWeight.bold)),
@@ -356,7 +601,16 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
                       activeThumbColor: AppTheme.primaryDark,
                       onChanged: _toggleBiometrics,
                     ),
-                    const Divider(color: Colors.white10, height: 1),
+                    const Divider(height: 1),
+                    SwitchListTile(
+                      secondary: const Icon(Icons.palette_outlined, color: AppTheme.primaryDark),
+                      title: const Text('Modo Blanco y Negro', style: TextStyle(fontWeight: FontWeight.bold)),
+                      subtitle: const Text('Tema monocromático elegante de alto contraste'),
+                      value: _isBlackAndWhiteMode,
+                      activeThumbColor: AppTheme.primaryDark,
+                      onChanged: _toggleBlackAndWhiteMode,
+                    ),
+                    const Divider(height: 1),
                     SwitchListTile(
                       secondary: const Icon(Icons.sms, color: AppTheme.primaryDark),
                       title: const Text('Lectura de SMS Bancarios', style: TextStyle(fontWeight: FontWeight.bold)),
@@ -393,8 +647,14 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
                     confirmButtonText: 'Sí, borrar todo',
                     cancelButtonText: 'Cancelar',
                     onConfirm: () async {
+                      if (context.mounted) {
+                        AppToast.show(context, message: 'Eliminando datos locales y limpiando registros en la nube (Render)...', type: AppToastType.info);
+                      }
+                      try {
+                        await ref.read(syncServiceProvider).resetCloudData();
+                      } catch (_) {}
                       await ref.read(secureStorageProvider).clearAll();
-                      await ref.read(dbHelperProvider).closeDatabase();
+                      await ref.read(dbHelperProvider).deleteDatabaseFile();
                       ref.read(authStateProvider.notifier).logout();
                     },
                   );

@@ -3,6 +3,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/providers/global_providers.dart';
 import 'core/theme/app_theme.dart';
+import 'core/theme/theme_provider.dart';
 import 'features/auth/presentation/login_screen.dart';
 import 'features/dashboard/presentation/home_screen.dart';
 
@@ -35,26 +36,36 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
     super.dispose();
   }
 
+  DateTime? _pausedTime;
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
     
-    // Auto-Lock security: locks database and wipes keys from memory when minimized
-    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
-      ref.read(authStateProvider.notifier).logout();
+    if (state == AppLifecycleState.paused) {
+      _pausedTime = DateTime.now();
+    } else if (state == AppLifecycleState.resumed) {
+      if (_pausedTime != null) {
+        final elapsed = DateTime.now().difference(_pausedTime!);
+        if (elapsed.inMinutes >= 3) {
+          ref.read(authStateProvider.notifier).logout();
+        }
+        _pausedTime = null;
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final isLoggedIn = ref.watch(authStateProvider);
+    final themeMode = ref.watch(appThemeModeProvider);
 
     return MaterialApp(
       title: 'My Finances',
       debugShowCheckedModeBanner: false,
       
-      // Theme settings
-      themeMode: ThemeMode.dark, // Defaulting to premium dark mode
+      // Dynamic Theme settings
+      themeMode: themeMode,
       darkTheme: AppTheme.darkTheme,
       theme: AppTheme.lightTheme,
 

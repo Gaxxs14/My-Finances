@@ -81,22 +81,29 @@ class _PasswordAuditorScreenState extends ConsumerState<PasswordAuditorScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const Text(
+                    Text(
                       'Generador de Passphrases (Método Diceware)',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white),
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                        color: Theme.of(context).brightness == Brightness.dark ? Colors.white : AppTheme.textPrimaryLight,
+                      ),
                     ),
                     const SizedBox(height: 8),
-                    const Text(
+                    Text(
                       'Crea contraseñas fáciles de recordar pero extremadamente difíciles de romper mediante fuerza bruta.',
-                      style: TextStyle(color: AppTheme.textSecondaryDark, fontSize: 12),
+                      style: TextStyle(
+                        color: Theme.of(context).brightness == Brightness.dark ? AppTheme.textSecondaryDark : AppTheme.textSecondaryLight,
+                        fontSize: 12,
+                      ),
                     ),
                     const SizedBox(height: 20),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                       decoration: BoxDecoration(
-                        color: Colors.black26,
+                        color: Theme.of(context).brightness == Brightness.dark ? Colors.black26 : Colors.grey[100],
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.white10),
+                        border: Border.all(color: Theme.of(context).brightness == Brightness.dark ? Colors.white10 : Colors.grey[300]!),
                       ),
                       child: Row(
                         children: [
@@ -131,16 +138,27 @@ class _PasswordAuditorScreenState extends ConsumerState<PasswordAuditorScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text('Cantidad de palabras:', style: TextStyle(color: Colors.white70)),
+                        Text(
+                          'Cantidad de palabras:',
+                          style: TextStyle(
+                            color: Theme.of(context).brightness == Brightness.dark ? Colors.white70 : AppTheme.textPrimaryLight,
+                          ),
+                        ),
                         Row(
                           children: [
                             IconButton(
-                              icon: const Icon(Icons.remove, color: Colors.white60),
+                              icon: const Icon(Icons.remove),
                               onPressed: _wordCount > 3 ? () => setState(() { _wordCount--; _generatePassphrase(); }) : null,
                             ),
-                            Text('$_wordCount', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                            Text(
+                              '$_wordCount',
+                              style: TextStyle(
+                                color: Theme.of(context).brightness == Brightness.dark ? Colors.white : AppTheme.textPrimaryLight,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                             IconButton(
-                              icon: const Icon(Icons.add, color: Colors.white60),
+                              icon: const Icon(Icons.add),
                               onPressed: _wordCount < 6 ? () => setState(() { _wordCount++; _generatePassphrase(); }) : null,
                             ),
                           ],

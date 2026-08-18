@@ -79,4 +79,7 @@ app.UseAuthorization();
 
 app.MapControllers();
 
+// Health check endpoint — used by UptimeRobot/cron-job.org to keep the server awake on Render free tier
+app.MapGet("/health", () => Results.Ok(new { status = "ok", timestamp = DateTime.UtcNow }));
+
 app.Run();
