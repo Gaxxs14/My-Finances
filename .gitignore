@@ -1,8 +1,5 @@
 # Unified GitIgnore for My-Finances (Flutter + C# .NET)
 
-# Exclude backend entirely from Git tracking for privacy/security
-backend/
-
 # =========================================================================
 # 1. C# .NET Ignore Rules
 # =========================================================================
@@ -16,16 +13,12 @@ backend/
 *.userprefs
 
 # Build results
-[Dd]ebug/
-[Dd]ebugPublic/
-[Rr]elease/
-x64/
-x86/
-[Aa]rm/
-[Aa]rm64/
-bld/
-[Bb]in/
-[Ob]j/
+**/[Dd]ebug/
+**/[Rr]elease/
+**/bin/
+**/obj/
+**/[Bb]in/
+**/[Ob]j/
 [Ll]og/
 [Ll]ogs/
 
